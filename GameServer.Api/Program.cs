@@ -18,4 +18,6 @@ app.UseSwaggerUI();
 
 app.MapControllers();
 
+app.MapGet("/ping", () => "pong");
+
 app.Run();
