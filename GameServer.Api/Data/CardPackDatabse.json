@@ -1,0 +1,29 @@
+{
+  "packs": [
+    {
+      "packId": "Bronze_Pack",
+      "packName": "Bronze Pack",
+      "cardCount": 2
+    },
+    {
+      "packId": "Emerald_Pack",
+      "packName": "Emerald Pack",
+      "cardCount": 3
+    },
+    {
+      "packId": "Lazurite_Pack",
+      "packName": "Lazurite Pack",
+      "cardCount": 4
+    },
+    {
+      "packId": "Sapphire_Pack",
+      "packName": "Sapphire Pack",
+      "cardCount": 6
+    },
+    {
+      "packId": "Ruby_Pack",
+      "packName": "Ruby Pack",
+      "cardCount": 7
+    }
+  ]
+}

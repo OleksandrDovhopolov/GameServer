@@ -1,0 +1,11 @@
+﻿@myCustomId = Sapphire_Pack
+
+### Проверка открытия пака
+POST http://localhost:5000/api/v1/packs/open
+Content-Type: application/json
+
+{
+  "playerId": "playerId",
+  "packId": "{{myCustomId}}",
+  "openPackRequestId": "string"
+}

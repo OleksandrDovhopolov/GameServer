@@ -1,0 +1,21 @@
+﻿services:
+  api:
+    build:
+      context: .
+      dockerfile: GameServer.Api/Dockerfile
+    ports:
+      - "5000:8080"
+    depends_on:
+      - redis
+      - rabbitmq
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
