@@ -42,6 +42,10 @@ builder.Services.AddScoped<RedisSaveRepository>();
 builder.Services.AddScoped<PostgreSqlSaveRepository>();
 builder.Services.AddScoped<ISaveRepository, HybridSaveRepository>();
 builder.Services.AddScoped<ISaveService, SaveService>();
+builder.Services.AddSingleton<IRandomGenerator, RandomGenerator>();
+builder.Services.AddSingleton<ISystemClock, SystemClock>();
+builder.Services.AddSingleton<IWheelRewardCatalog, WheelRewardCatalog>();
+builder.Services.AddScoped<IWheelService, WheelService>();
 
 var app = builder.Build();
 
@@ -76,6 +80,9 @@ await using (var scope = app.Services.CreateAsyncScope())
         cancellationToken: stoppingToken));
     startupLogger.LogInformation("PostgreSQL schema initialization completed successfully.");
 }
+
+// Force reward catalog initialization at startup so invalid configuration fails fast.
+app.Services.GetRequiredService<IWheelRewardCatalog>();
 
 app.UseSwagger();
 app.UseSwaggerUI();

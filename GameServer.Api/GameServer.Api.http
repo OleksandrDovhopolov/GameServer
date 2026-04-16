@@ -4,3 +4,17 @@ GET {{GameServer.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+GET {{GameServer.Api_HostAddress}}/api/v1/wheel/rewards
+Accept: application/json
+
+###
+
+POST {{GameServer.Api_HostAddress}}/api/v1/wheel/spin
+Content-Type: application/json
+
+{
+  "playerId": "test-player-1"
+}
+
+###

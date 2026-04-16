@@ -1,0 +1,8 @@
+{
+  "rewards": [
+    { "id": "gold_500", "weight": 40 },
+    { "id": "gems_10", "weight": 10 },
+    { "id": "energy_refill", "weight": 30 },
+    { "id": "legendary_chest", "weight": 2 }
+  ]
+}
