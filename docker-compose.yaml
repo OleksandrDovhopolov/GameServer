@@ -8,6 +8,8 @@
     depends_on:
       - redis
       - rabbitmq
+    environment:
+      - Redis__ConnectionString=redis:6379,abortConnect=false
 
   redis:
     image: redis:alpine
