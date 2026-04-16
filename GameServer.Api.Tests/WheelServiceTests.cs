@@ -10,6 +10,34 @@ namespace GameServer.Api.Tests;
 public sealed class WheelServiceTests
 {
     [Fact]
+    public async Task GetState_WhenDataDoesNotExist_ReturnsConfiguredDefaults()
+    {
+        const long now = 1_700_000_000_000;
+        var repository = new InMemorySaveRepository();
+        var service = CreateService(repository, now);
+
+        var result = await service.GetStateAsync("p1", CancellationToken.None);
+
+        Assert.Equal(8, result.AvailableSpins);
+        Assert.Equal(900, result.NextRegenSeconds);
+    }
+
+    [Fact]
+    public async Task GetState_WhenStateExists_ReturnsStoredSpinsAndRemainingTime()
+    {
+        const long now = 1_700_000_000_000;
+        var lastReset = now - (14 * 60 * 1000);
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"availableSpins\":2,\"lastResetTimestamp\":{lastReset}}}");
+        var service = CreateService(repository, now);
+
+        var result = await service.GetStateAsync("p1", CancellationToken.None);
+
+        Assert.Equal(2, result.AvailableSpins);
+        Assert.Equal(60, result.NextRegenSeconds);
+    }
+
+    [Fact]
     public async Task Spin_WhenLessThanRegenInterval_DoesNotResetSpins()
     {
         const long now = 1_700_000_000_000;

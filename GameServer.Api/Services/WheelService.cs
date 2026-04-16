@@ -10,6 +10,7 @@ public sealed class WheelService : IWheelService
     private const int MaxAvailableSpins = 8;
     private static readonly TimeSpan RegenInterval = TimeSpan.FromMinutes(15);
     private static readonly long RegenIntervalMs = (long)RegenInterval.TotalMilliseconds;
+    private static readonly int DefaultNextRegenSeconds = (int)RegenInterval.TotalSeconds;
 
     private readonly ISaveRepository _saveRepository;
     private readonly IWheelRewardCatalog _rewardCatalog;
@@ -23,6 +24,29 @@ public sealed class WheelService : IWheelService
     }
 
     public IReadOnlyList<WheelReward> GetRewards() => _rewardCatalog.GetRewards();
+
+    public async Task<WheelStateResult> GetStateAsync(string playerId, CancellationToken cancellationToken)
+    {
+        ValidatePlayerId(playerId);
+
+        var now = _clock.UtcNowUnixMilliseconds;
+        var root = await LoadSaveDocumentAsync(playerId, cancellationToken);
+        if (!TryReadExistingState(root, now, out var state))
+        {
+            return new WheelStateResult
+            {
+                AvailableSpins = MaxAvailableSpins,
+                NextRegenSeconds = DefaultNextRegenSeconds
+            };
+        }
+
+        ApplyRegenIfNeeded(ref state, now);
+        return new WheelStateResult
+        {
+            AvailableSpins = state.AvailableSpins,
+            NextRegenSeconds = CalculateNextRegenSeconds(state, now)
+        };
+    }
 
     public async Task<WheelSpinResult> SpinAsync(string playerId, CancellationToken cancellationToken)
     {
@@ -81,23 +105,39 @@ public sealed class WheelService : IWheelService
 
     private static WheelState ReadState(JsonObject root, long now)
     {
-        var availableSpins = TryGetInt(root, "availableSpins");
-        if (availableSpins is null || availableSpins < 0 || availableSpins > MaxAvailableSpins)
+        if (TryReadExistingState(root, now, out var state))
         {
-            availableSpins = MaxAvailableSpins;
-        }
-
-        var lastResetTimestamp = TryGetLong(root, "lastResetTimestamp");
-        if (lastResetTimestamp is null || lastResetTimestamp <= 0 || lastResetTimestamp > now)
-        {
-            lastResetTimestamp = now;
+            return state;
         }
 
         return new WheelState
         {
+            AvailableSpins = MaxAvailableSpins,
+            LastResetTimestamp = now
+        };
+    }
+
+    private static bool TryReadExistingState(JsonObject root, long now, out WheelState state)
+    {
+        var availableSpins = TryGetInt(root, "availableSpins");
+        var lastResetTimestamp = TryGetLong(root, "lastResetTimestamp");
+        if (availableSpins is null ||
+            availableSpins < 0 ||
+            availableSpins > MaxAvailableSpins ||
+            lastResetTimestamp is null ||
+            lastResetTimestamp <= 0 ||
+            lastResetTimestamp > now)
+        {
+            state = default;
+            return false;
+        }
+
+        state = new WheelState
+        {
             AvailableSpins = availableSpins.Value,
             LastResetTimestamp = lastResetTimestamp.Value
         };
+        return true;
     }
 
     private static void ApplyRegenIfNeeded(ref WheelState state, long now)

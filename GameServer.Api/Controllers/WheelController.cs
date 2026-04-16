@@ -40,6 +40,38 @@ public sealed class WheelController : ControllerBase
         }
     }
 
+    [HttpGet("data")]
+    public async Task<ActionResult<WheelDataResponse>> GetData([FromQuery] string playerId, CancellationToken cancellationToken)
+    {
+        using (_logger.BeginScope(new Dictionary<string, object> { ["PlayerId"] = playerId }))
+        {
+            try
+            {
+                var result = await _wheelService.GetStateAsync(playerId, cancellationToken);
+                return Ok(new WheelDataResponse
+                {
+                    AvailableSpins = result.AvailableSpins,
+                    NextRegenSeconds = result.NextRegenSeconds
+                });
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Wheel data request validation failed.");
+                return BadRequest(ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Wheel data request canceled.");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Wheel data request failed.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "Internal error while loading wheel data.");
+            }
+        }
+    }
+
     [HttpPost("spin")]
     public async Task<ActionResult<WheelSpinResponse>> Spin([FromBody] WheelSpinRequest request, CancellationToken cancellationToken)
     {
