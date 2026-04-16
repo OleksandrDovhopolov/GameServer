@@ -49,7 +49,8 @@ builder.Services.AddScoped<IWheelService, WheelService>();
 
 var app = builder.Build();
 
-// Initialize PostgreSQL schema on startup so the API can immediately persist/load saves.
+// PostgreSQL schema initialization is temporarily disabled (Redis-only persistence).
+/*
 var stoppingToken = app.Lifetime.ApplicationStopping;
 await using (var scope = app.Services.CreateAsyncScope())
 {
@@ -80,6 +81,7 @@ await using (var scope = app.Services.CreateAsyncScope())
         cancellationToken: stoppingToken));
     startupLogger.LogInformation("PostgreSQL schema initialization completed successfully.");
 }
+*/
 
 // Force reward catalog initialization at startup so invalid configuration fails fast.
 app.Services.GetRequiredService<IWheelRewardCatalog>();

@@ -33,30 +33,18 @@ public sealed class HybridSaveRepository : ISaveRepository
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Source of truth first: only update Redis if the database write succeeded.
-        await _postgresRepository.SaveAsync(playerId, data, cancellationToken);
-        _logger.LogInformation("HybridSaveRepository: saved save to PostgreSQL for {PlayerId}.", playerId);
+        // PostgreSQL save is temporarily disabled (Redis-only persistence).
+        // await _postgresRepository.SaveAsync(playerId, data, cancellationToken);
+        // _logger.LogInformation("HybridSaveRepository: saved save to PostgreSQL for {PlayerId}.", playerId);
+        // var lastModified = await _postgresRepository.GetLastModifiedTimestampAsync(playerId, cancellationToken);
+        // if (lastModified is null)
+        // {
+        //     lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        // }
 
-        var lastModified = await _postgresRepository.GetLastModifiedTimestampAsync(playerId, cancellationToken);
-        if (lastModified is null)
-        {
-            // Defensive fallback in case the DB row was written but meta couldn't be read.
-            lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        }
-
-        try
-        {
-            await CacheToRedisAsync(playerId, data, lastModified.Value, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            // Do not fail the request if the cache update fails; the DB is already persisted.
-            _logger.LogWarning(ex, "Redis cache update failed after saving save for {PlayerId}.", playerId);
-        }
+        var lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await CacheToRedisAsync(playerId, data, lastModified, cancellationToken);
+        _logger.LogInformation("HybridSaveRepository: saved save to Redis for {PlayerId}.", playerId);
     }
 
     public async Task<SaveRecord?> LoadAsync(string playerId, CancellationToken cancellationToken)
@@ -118,27 +106,21 @@ public sealed class HybridSaveRepository : ISaveRepository
             _logger.LogWarning(ex, "HybridSaveRepository: PostgreSQL unavailable for {PlayerId}; returning default state.", playerId);
         }
 
-        // 3) Both miss/fail cases: return default state and (best effort) create it in PostgreSQL.
-        if (postgresFailed)
-        {
-            return new SaveRecord
-            {
-                Data = DefaultSaveData,
-                LastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-            };
-        }
-
-        // Postgres miss: create the default record and return it.
-        await _postgresRepository.SaveAsync(playerId, DefaultSaveData, cancellationToken);
-        _logger.LogInformation("HybridSaveRepository: PostgreSQL miss; created default save for {PlayerId}.", playerId);
-        var createdLastModified = await _postgresRepository.GetLastModifiedTimestampAsync(playerId, cancellationToken);
+        // 3) Both miss/fail cases: return default state and cache it in Redis.
+        // PostgreSQL default-save creation is temporarily disabled (Redis-only persistence).
+        // if (!postgresFailed)
+        // {
+        //     await _postgresRepository.SaveAsync(playerId, DefaultSaveData, cancellationToken);
+        //     _logger.LogInformation("HybridSaveRepository: PostgreSQL miss; created default save for {PlayerId}.", playerId);
+        //     var createdLastModified = await _postgresRepository.GetLastModifiedTimestampAsync(playerId, cancellationToken);
+        // }
         var record = new SaveRecord
         {
             Data = DefaultSaveData,
-            LastModified = createdLastModified ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            LastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
         };
 
-        // Best-effort cache write: even if Redis is down we still fulfill the request.
+        // Best-effort cache write for default state.
         try
         {
             await CacheToRedisAsync(playerId, record.Data, record.LastModified, cancellationToken);
@@ -152,6 +134,15 @@ public sealed class HybridSaveRepository : ISaveRepository
             _logger.LogWarning(ex, "HybridSaveRepository: Redis cache update failed for default save for {PlayerId}.", playerId);
         }
 
+        if (postgresFailed)
+        {
+            _logger.LogInformation("HybridSaveRepository: PostgreSQL unavailable for {PlayerId}; returned Redis/default state.", playerId);
+        }
+        else
+        {
+            _logger.LogInformation("HybridSaveRepository: Redis and PostgreSQL miss for {PlayerId}; returned default Redis state.", playerId);
+        }
+
         return record;
     }
 
@@ -159,22 +150,11 @@ public sealed class HybridSaveRepository : ISaveRepository
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Source of truth first.
-        await _postgresRepository.DeleteAsync(playerId, cancellationToken);
+        // PostgreSQL delete is temporarily disabled (Redis-only persistence).
+        // await _postgresRepository.DeleteAsync(playerId, cancellationToken);
 
-        // Cache invalidation best-effort.
-        try
-        {
-            await _redisRepository.DeleteAsync(playerId, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "HybridSaveRepository: Redis deletion failed for {PlayerId}.", playerId);
-        }
+        await _redisRepository.DeleteAsync(playerId, cancellationToken);
+        _logger.LogInformation("HybridSaveRepository: deleted save from Redis for {PlayerId}.", playerId);
     }
 
     public async Task<bool> ExistsAsync(string playerId, CancellationToken cancellationToken)
