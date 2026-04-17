@@ -12,11 +12,7 @@ public sealed class WheelService : IWheelService
     private const int MaxAvailableSpins = 8;
     private const string FortuneWheelPropertyName = "FortuneWheel";
     private const string AvailableSpinsPropertyName = "AvailableSpins";
-    private const string LastResetTimestampPropertyName = "LastResetTimestamp";
-    private const string LegacyNestedAvailableSpinsPropertyName = "availableSpins";
-    private const string LegacyNestedLastResetTimestampPropertyName = "lastResetTimestamp";
-    private const string LegacyAvailableSpinsPropertyName = "availableSpins";
-    private const string LegacyLastResetTimestampPropertyName = "lastResetTimestamp";
+    private const string UpdatedAtPropertyName = "UpdatedAt";
     private static readonly TimeSpan RegenInterval = TimeSpan.FromMinutes(2);
     private static readonly long RegenIntervalMs = (long)RegenInterval.TotalMilliseconds;
 
@@ -53,63 +49,70 @@ public sealed class WheelService : IWheelService
 
         var root = await LoadSaveDocumentAsync(playerId, cancellationToken);
         var hasExistingState = TryReadExistingState(root, now, out var state, out var diagnostics);
-        var hasLegacyRootFields = HasLegacyRootWheelFields(root);
-        var stateChanged = hasLegacyRootFields ||
+        var hasNonCanonicalWheelFields = HasNonCanonicalWheelFields(root);
+        var stateChanged = hasNonCanonicalWheelFields ||
                            diagnostics.TimestampWasNormalized ||
-                           diagnostics.TimestampWasRepaired ||
-                           diagnostics.UsedLegacyNestedTimestampKey;
+                           diagnostics.TimestampWasRepaired;
 
         _logger.LogInformation(
-            "Wheel GetState read outcome. HasExistingState: {HasExistingState}, Source: {Source}, RawAvailableSpins: {RawAvailableSpins}, RawLastResetTimestamp: {RawLastResetTimestamp}, NormalizedLastResetTimestamp: {NormalizedLastResetTimestamp}, TimestampWasNormalized: {TimestampWasNormalized}, TimestampWasRepaired: {TimestampWasRepaired}, UsedLegacyNestedTimestampKey: {UsedLegacyNestedTimestampKey}, FailureReason: {FailureReason}, HasLegacyRootFields: {HasLegacyRootFields}",
+            "Wheel GetState read outcome. HasExistingState: {HasExistingState}, Source: {Source}, RawAvailableSpins: {RawAvailableSpins}, RawUpdatedAt: {RawUpdatedAt}, NormalizedUpdatedAt: {NormalizedUpdatedAt}, TimestampWasNormalized: {TimestampWasNormalized}, TimestampWasRepaired: {TimestampWasRepaired}, FailureReason: {FailureReason}, HasNonCanonicalWheelFields: {HasNonCanonicalWheelFields}",
             hasExistingState,
             diagnostics.Source,
             diagnostics.RawAvailableSpins,
-            diagnostics.RawLastResetTimestamp,
-            diagnostics.NormalizedLastResetTimestamp,
+            diagnostics.RawUpdatedAt,
+            diagnostics.NormalizedUpdatedAt,
             diagnostics.TimestampWasNormalized,
             diagnostics.TimestampWasRepaired,
-            diagnostics.UsedLegacyNestedTimestampKey,
             diagnostics.FailureReason,
-            hasLegacyRootFields);
+            hasNonCanonicalWheelFields);
+
+        if (hasNonCanonicalWheelFields)
+        {
+            _logger.LogWarning(
+                "Wheel GetState detected non-canonical wheel fields. They will be ignored and canonicalized on save. AvailableSpins/UpdatedAt are the only persisted wheel keys.");
+        }
 
         if (!hasExistingState)
         {
-            state = new WheelState
+            state = new FortuneWheelModuleSaveData
             {
                 AvailableSpins = MaxAvailableSpins,
-                LastResetTimestamp = now
+                UpdatedAt = now,
+                NextUpdateAt = now + RegenIntervalMs
             };
             stateChanged = true;
             _logger.LogWarning(
-                "Wheel GetState initialized default state due to invalid or missing persisted state. AvailableSpins: {AvailableSpins}, LastResetTimestamp: {LastResetTimestamp}",
+                "Wheel GetState initialized default state due to invalid or missing persisted state. AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
                 state.AvailableSpins,
-                state.LastResetTimestamp);
+                state.UpdatedAt,
+                state.NextUpdateAt);
         }
 
-        var elapsedBeforeRegenMs = now - state.LastResetTimestamp;
-        var regenApplied = ApplyRegenIfNeeded(ref state, now);
+        var elapsedBeforeRegenMs = now - state.UpdatedAt;
+        var regenApplied = ApplyRegenIfNeeded(state, now);
         stateChanged |= regenApplied;
         _logger.LogInformation(
-            "Wheel GetState regen check. ElapsedMs: {ElapsedMs}, RegenThresholdMs: {RegenThresholdMs}, RegenApplied: {RegenApplied}, AvailableSpinsAfterRegen: {AvailableSpinsAfterRegen}, LastResetTimestampAfterRegen: {LastResetTimestampAfterRegen}",
+            "Wheel GetState regen check. ElapsedMs: {ElapsedMs}, RegenThresholdMs: {RegenThresholdMs}, RegenApplied: {RegenApplied}, AvailableSpinsAfterRegen: {AvailableSpinsAfterRegen}, UpdatedAtAfterRegen: {UpdatedAtAfterRegen}, NextUpdateAtAfterRegen: {NextUpdateAtAfterRegen}",
             elapsedBeforeRegenMs,
             RegenIntervalMs,
             regenApplied,
             state.AvailableSpins,
-            state.LastResetTimestamp);
+            state.UpdatedAt,
+            state.NextUpdateAt);
 
         if (stateChanged)
         {
             SetState(root, state);
             await SaveDocumentAsync(playerId, root, cancellationToken);
             _logger.LogInformation(
-                "Wheel GetState persisted state. AvailableSpins: {AvailableSpins}, LastResetTimestamp: {LastResetTimestamp}, SaveReasons: {SaveReasons}",
+                "Wheel GetState persisted state. AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, SaveReasons: {SaveReasons}",
                 state.AvailableSpins,
-                state.LastResetTimestamp,
+                state.UpdatedAt,
+                state.NextUpdateAt,
                 BuildSaveReasons(
-                    hasLegacyRootFields,
+                    hasNonCanonicalWheelFields,
                     diagnostics.TimestampWasNormalized,
                     diagnostics.TimestampWasRepaired,
-                    diagnostics.UsedLegacyNestedTimestampKey,
                     regenApplied,
                     !hasExistingState));
         }
@@ -121,8 +124,8 @@ public sealed class WheelService : IWheelService
         return new WheelStateResult
         {
             AvailableSpins = state.AvailableSpins,
-            UpdatedAt = state.LastResetTimestamp,
-            NextUpdateAt = CalculateNextUpdateTimestamp(state)
+            UpdatedAt = state.UpdatedAt,
+            NextUpdateAt = state.NextUpdateAt
         };
     }
 
@@ -135,70 +138,81 @@ public sealed class WheelService : IWheelService
 
         var root = await LoadSaveDocumentAsync(playerId, cancellationToken);
         var state = ReadState(root, now, out var hasExistingState, out var diagnostics);
+        var hasNonCanonicalWheelFields = HasNonCanonicalWheelFields(root);
         _logger.LogInformation(
-            "Wheel Spin read outcome. HasExistingState: {HasExistingState}, Source: {Source}, RawAvailableSpins: {RawAvailableSpins}, RawLastResetTimestamp: {RawLastResetTimestamp}, NormalizedLastResetTimestamp: {NormalizedLastResetTimestamp}, TimestampWasNormalized: {TimestampWasNormalized}, TimestampWasRepaired: {TimestampWasRepaired}, UsedLegacyNestedTimestampKey: {UsedLegacyNestedTimestampKey}, FailureReason: {FailureReason}, EffectiveAvailableSpins: {EffectiveAvailableSpins}, EffectiveLastResetTimestamp: {EffectiveLastResetTimestamp}",
+            "Wheel Spin read outcome. HasExistingState: {HasExistingState}, Source: {Source}, RawAvailableSpins: {RawAvailableSpins}, RawUpdatedAt: {RawUpdatedAt}, NormalizedUpdatedAt: {NormalizedUpdatedAt}, TimestampWasNormalized: {TimestampWasNormalized}, TimestampWasRepaired: {TimestampWasRepaired}, FailureReason: {FailureReason}, HasNonCanonicalWheelFields: {HasNonCanonicalWheelFields}, EffectiveAvailableSpins: {EffectiveAvailableSpins}, EffectiveUpdatedAt: {EffectiveUpdatedAt}, EffectiveNextUpdateAt: {EffectiveNextUpdateAt}",
             hasExistingState,
             diagnostics.Source,
             diagnostics.RawAvailableSpins,
-            diagnostics.RawLastResetTimestamp,
-            diagnostics.NormalizedLastResetTimestamp,
+            diagnostics.RawUpdatedAt,
+            diagnostics.NormalizedUpdatedAt,
             diagnostics.TimestampWasNormalized,
             diagnostics.TimestampWasRepaired,
-            diagnostics.UsedLegacyNestedTimestampKey,
             diagnostics.FailureReason,
+            hasNonCanonicalWheelFields,
             state.AvailableSpins,
-            state.LastResetTimestamp);
+            state.UpdatedAt,
+            state.NextUpdateAt);
+
+        if (hasNonCanonicalWheelFields)
+        {
+            _logger.LogWarning(
+                "Wheel Spin detected non-canonical wheel fields. They will be ignored and canonicalized on save. AvailableSpins/UpdatedAt are the only persisted wheel keys.");
+        }
 
         var spinsBeforeRegen = state.AvailableSpins;
-        var lastResetBeforeRegen = state.LastResetTimestamp;
-        var elapsedBeforeRegenMs = now - state.LastResetTimestamp;
-        var regenApplied = ApplyRegenIfNeeded(ref state, now);
+        var updatedAtBeforeRegen = state.UpdatedAt;
+        var elapsedBeforeRegenMs = now - state.UpdatedAt;
+        var regenApplied = ApplyRegenIfNeeded(state, now);
         _logger.LogInformation(
-            "Wheel Spin regen check. ElapsedMs: {ElapsedMs}, RegenThresholdMs: {RegenThresholdMs}, RegenApplied: {RegenApplied}, AvailableSpinsBeforeRegen: {AvailableSpinsBeforeRegen}, AvailableSpinsAfterRegen: {AvailableSpinsAfterRegen}, LastResetTimestampBeforeRegen: {LastResetTimestampBeforeRegen}, LastResetTimestampAfterRegen: {LastResetTimestampAfterRegen}",
+            "Wheel Spin regen check. ElapsedMs: {ElapsedMs}, RegenThresholdMs: {RegenThresholdMs}, RegenApplied: {RegenApplied}, AvailableSpinsBeforeRegen: {AvailableSpinsBeforeRegen}, AvailableSpinsAfterRegen: {AvailableSpinsAfterRegen}, UpdatedAtBeforeRegen: {UpdatedAtBeforeRegen}, UpdatedAtAfterRegen: {UpdatedAtAfterRegen}, NextUpdateAtAfterRegen: {NextUpdateAtAfterRegen}",
             elapsedBeforeRegenMs,
             RegenIntervalMs,
             regenApplied,
             spinsBeforeRegen,
             state.AvailableSpins,
-            lastResetBeforeRegen,
-            state.LastResetTimestamp);
+            updatedAtBeforeRegen,
+            state.UpdatedAt,
+            state.NextUpdateAt);
 
         if (state.AvailableSpins <= 0)
         {
             SetState(root, state);
             await SaveDocumentAsync(playerId, root, cancellationToken);
             _logger.LogWarning(
-                "Wheel Spin blocked due to no spins. UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, PersistedAvailableSpins: {PersistedAvailableSpins}, PersistedLastResetTimestamp: {PersistedLastResetTimestamp}",
-                state.LastResetTimestamp,
-                CalculateNextUpdateTimestamp(state),
-                state.AvailableSpins,
-                state.LastResetTimestamp);
-            throw new NoSpinsAvailableException(state.LastResetTimestamp, CalculateNextUpdateTimestamp(state));
+                "Wheel Spin blocked due to no spins. UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, PersistedAvailableSpins: {PersistedAvailableSpins}",
+                state.UpdatedAt,
+                state.NextUpdateAt,
+                state.AvailableSpins);
+            throw new NoSpinsAvailableException(state.UpdatedAt, state.NextUpdateAt);
         }
 
         var spinsBeforeConsume = state.AvailableSpins;
         var rewardId = _rewardCatalog.RollRewardId();
         state.AvailableSpins -= 1;
+        state.NextUpdateAt = CalculateNextUpdateTimestamp(state.UpdatedAt);
         _logger.LogInformation(
-            "Wheel Spin consumed one spin. RewardId: {RewardId}, AvailableSpinsBeforeConsume: {AvailableSpinsBeforeConsume}, AvailableSpinsAfterConsume: {AvailableSpinsAfterConsume}",
+            "Wheel Spin consumed one spin. RewardId: {RewardId}, AvailableSpinsBeforeConsume: {AvailableSpinsBeforeConsume}, AvailableSpinsAfterConsume: {AvailableSpinsAfterConsume}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
             rewardId,
             spinsBeforeConsume,
-            state.AvailableSpins);
+            state.AvailableSpins,
+            state.UpdatedAt,
+            state.NextUpdateAt);
 
         SetState(root, state);
         await SaveDocumentAsync(playerId, root, cancellationToken);
         _logger.LogInformation(
-            "Wheel Spin persisted state. AvailableSpins: {AvailableSpins}, LastResetTimestamp: {LastResetTimestamp}, NextUpdateAt: {NextUpdateAt}",
+            "Wheel Spin persisted state. AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
             state.AvailableSpins,
-            state.LastResetTimestamp,
-            CalculateNextUpdateTimestamp(state));
+            state.UpdatedAt,
+            state.NextUpdateAt);
 
         return new WheelSpinResult
         {
             RewardId = rewardId,
             AvailableSpins = state.AvailableSpins,
-            UpdatedAt = state.LastResetTimestamp,
-            NextUpdateAt = CalculateNextUpdateTimestamp(state)
+            UpdatedAt = state.UpdatedAt,
+            NextUpdateAt = state.NextUpdateAt
         };
     }
 
@@ -243,7 +257,11 @@ public sealed class WheelService : IWheelService
             string.Join(", ", document.Select(kvp => kvp.Key)));
     }
 
-    private static WheelState ReadState(JsonObject root, long now, out bool hasExistingState, out WheelStateReadDiagnostics diagnostics)
+    private static FortuneWheelModuleSaveData ReadState(
+        JsonObject root,
+        long now,
+        out bool hasExistingState,
+        out WheelStateReadDiagnostics diagnostics)
     {
         hasExistingState = TryReadExistingState(root, now, out var state, out diagnostics);
         if (hasExistingState)
@@ -251,137 +269,124 @@ public sealed class WheelService : IWheelService
             return state;
         }
 
-        return new WheelState
+        return new FortuneWheelModuleSaveData
         {
             AvailableSpins = MaxAvailableSpins,
-            LastResetTimestamp = now
+            UpdatedAt = now,
+            NextUpdateAt = now + RegenIntervalMs
         };
     }
 
-    private static bool TryReadExistingState(JsonObject root, long now, out WheelState state, out WheelStateReadDiagnostics diagnostics)
-    {
-        if (root.TryGetPropertyValue(FortuneWheelPropertyName, out var fortuneWheelNode))
-        {
-            if (fortuneWheelNode is not JsonObject fortuneWheel)
-            {
-                state = default;
-                diagnostics = new WheelStateReadDiagnostics
-                {
-                    Source = "FortuneWheel",
-                    FailureReason = "FortuneWheelIsNotJsonObject"
-                };
-                return false;
-            }
-
-            return TryReadStateFromNode(
-                fortuneWheel,
-                AvailableSpinsPropertyName,
-                LastResetTimestampPropertyName,
-                "FortuneWheel",
-                now,
-                out state,
-                out diagnostics);
-        }
-
-        return TryReadStateFromNode(
-            root,
-            LegacyAvailableSpinsPropertyName,
-            LegacyLastResetTimestampPropertyName,
-            "LegacyRoot",
-            now,
-            out state,
-            out diagnostics);
-    }
-
-    private static bool TryReadStateFromNode(
-        JsonObject sourceNode,
-        string availableSpinsPropertyName,
-        string lastResetTimestampPropertyName,
-        string source,
+    private static bool TryReadExistingState(
+        JsonObject root,
         long now,
-        out WheelState state,
+        out FortuneWheelModuleSaveData state,
         out WheelStateReadDiagnostics diagnostics)
     {
-        var availableSpins = TryGetInt(sourceNode, availableSpinsPropertyName);
-        var rawLastResetTimestamp = TryGetLong(sourceNode, lastResetTimestampPropertyName);
-        var usedLegacyNestedTimestampKey = false;
-        if (rawLastResetTimestamp is null && source == "FortuneWheel")
+        if (!root.TryGetPropertyValue(FortuneWheelPropertyName, out var fortuneWheelNode))
         {
-            rawLastResetTimestamp = TryGetLong(sourceNode, LegacyNestedLastResetTimestampPropertyName);
-            usedLegacyNestedTimestampKey = rawLastResetTimestamp is not null;
+            state = default!;
+            diagnostics = new WheelStateReadDiagnostics
+            {
+                Source = "FortuneWheel",
+                FailureReason = "FortuneWheelMissing"
+            };
+            return false;
         }
+
+        if (fortuneWheelNode is not JsonObject fortuneWheel)
+        {
+            state = default!;
+            diagnostics = new WheelStateReadDiagnostics
+            {
+                Source = "FortuneWheel",
+                FailureReason = "FortuneWheelIsNotJsonObject"
+            };
+            return false;
+        }
+
+        return TryReadStateFromFortuneWheel(fortuneWheel, now, out state, out diagnostics);
+    }
+
+    private static bool TryReadStateFromFortuneWheel(
+        JsonObject fortuneWheel,
+        long now,
+        out FortuneWheelModuleSaveData state,
+        out WheelStateReadDiagnostics diagnostics)
+    {
+        var availableSpins = TryGetInt(fortuneWheel, AvailableSpinsPropertyName);
+        var rawUpdatedAt = TryGetLong(fortuneWheel, UpdatedAtPropertyName);
 
         if (availableSpins is null)
         {
-            state = default;
+            state = default!;
             diagnostics = new WheelStateReadDiagnostics
             {
-                Source = source,
+                Source = "FortuneWheel",
                 FailureReason = "MissingOrInvalidAvailableSpins",
-                RawLastResetTimestamp = rawLastResetTimestamp
+                RawUpdatedAt = rawUpdatedAt
             };
             return false;
         }
 
         if (availableSpins < 0 || availableSpins > MaxAvailableSpins)
         {
-            state = default;
+            state = default!;
             diagnostics = new WheelStateReadDiagnostics
             {
-                Source = source,
+                Source = "FortuneWheel",
                 FailureReason = "AvailableSpinsOutOfRange",
                 RawAvailableSpins = availableSpins,
-                RawLastResetTimestamp = rawLastResetTimestamp
+                RawUpdatedAt = rawUpdatedAt
             };
             return false;
         }
 
-        if (rawLastResetTimestamp is null)
+        if (rawUpdatedAt is null)
         {
-            state = new WheelState
+            state = new FortuneWheelModuleSaveData
             {
                 AvailableSpins = availableSpins.Value,
-                LastResetTimestamp = now
+                UpdatedAt = now,
+                NextUpdateAt = now + RegenIntervalMs
             };
             diagnostics = new WheelStateReadDiagnostics
             {
-                Source = source,
-                FailureReason = "MissingLastResetTimestampRepairedToNow",
+                Source = "FortuneWheel",
+                FailureReason = "MissingUpdatedAtRepairedToNow",
                 RawAvailableSpins = availableSpins,
                 TimestampWasRepaired = true,
-                NormalizedLastResetTimestamp = now,
-                UsedLegacyNestedTimestampKey = usedLegacyNestedTimestampKey
+                NormalizedUpdatedAt = now
             };
             return true;
         }
 
-        if (!TryNormalizeTimestamp(rawLastResetTimestamp.Value, now, out var normalizedTimestamp, out var timestampWasNormalized, out var timestampFailureReason))
+        if (!TryNormalizeTimestamp(rawUpdatedAt.Value, now, out var normalizedTimestamp, out var timestampWasNormalized, out var timestampFailureReason))
         {
-            state = default;
+            state = default!;
             diagnostics = new WheelStateReadDiagnostics
             {
-                Source = source,
-                FailureReason = timestampFailureReason ?? "LastResetTimestampInvalid",
+                Source = "FortuneWheel",
+                FailureReason = timestampFailureReason ?? "UpdatedAtInvalid",
                 RawAvailableSpins = availableSpins,
-                RawLastResetTimestamp = rawLastResetTimestamp,
-                UsedLegacyNestedTimestampKey = usedLegacyNestedTimestampKey
+                RawUpdatedAt = rawUpdatedAt
             };
             return false;
         }
 
-        state = new WheelState
+        state = new FortuneWheelModuleSaveData
         {
             AvailableSpins = availableSpins.Value,
-            LastResetTimestamp = normalizedTimestamp
+            UpdatedAt = normalizedTimestamp,
+            NextUpdateAt = CalculateNextUpdateTimestamp(normalizedTimestamp)
         };
         diagnostics = new WheelStateReadDiagnostics
         {
-            Source = source,
+            Source = "FortuneWheel",
             TimestampWasNormalized = timestampWasNormalized,
             RawAvailableSpins = availableSpins,
-            RawLastResetTimestamp = rawLastResetTimestamp,
-            NormalizedLastResetTimestamp = normalizedTimestamp,
-            UsedLegacyNestedTimestampKey = usedLegacyNestedTimestampKey
+            RawUpdatedAt = rawUpdatedAt,
+            NormalizedUpdatedAt = normalizedTimestamp
         };
         return true;
     }
@@ -399,7 +404,7 @@ public sealed class WheelService : IWheelService
 
         if (rawTimestamp <= 0)
         {
-            failureReason = "LastResetTimestampNonPositive";
+            failureReason = "UpdatedAtNonPositive";
             return false;
         }
 
@@ -407,7 +412,7 @@ public sealed class WheelService : IWheelService
         {
             if (rawTimestamp > long.MaxValue / 1000)
             {
-                failureReason = "LastResetTimestampSecondsOverflow";
+                failureReason = "UpdatedAtSecondsOverflow";
                 return false;
             }
 
@@ -418,7 +423,7 @@ public sealed class WheelService : IWheelService
                 return true;
             }
 
-            failureReason = "LastResetTimestampSecondsInFutureAfterNormalization";
+            failureReason = "UpdatedAtSecondsInFutureAfterNormalization";
             return false;
         }
 
@@ -427,7 +432,7 @@ public sealed class WheelService : IWheelService
             return true;
         }
 
-        failureReason = "LastResetTimestampMillisecondsInFuture";
+        failureReason = "UpdatedAtMillisecondsInFuture";
         return false;
     }
 
@@ -436,33 +441,44 @@ public sealed class WheelService : IWheelService
         return timestamp <= 9_999_999_999;
     }
 
-    private static bool ApplyRegenIfNeeded(ref WheelState state, long now)
+    private static bool ApplyRegenIfNeeded(FortuneWheelModuleSaveData state, long now)
     {
-        if (now - state.LastResetTimestamp < RegenIntervalMs)
+        if (now - state.UpdatedAt < RegenIntervalMs)
         {
+            state.NextUpdateAt = CalculateNextUpdateTimestamp(state.UpdatedAt);
             return false;
         }
 
         state.AvailableSpins = MaxAvailableSpins;
-        state.LastResetTimestamp = now;
+        state.UpdatedAt = now;
+        state.NextUpdateAt = CalculateNextUpdateTimestamp(state.UpdatedAt);
         return true;
     }
 
-    private static long CalculateNextUpdateTimestamp(WheelState state)
+    private static long CalculateNextUpdateTimestamp(long updatedAt)
     {
-        return state.LastResetTimestamp + RegenIntervalMs;
+        return updatedAt + RegenIntervalMs;
     }
 
-    private static bool HasLegacyRootWheelFields(JsonObject root)
+    private static bool HasNonCanonicalWheelFields(JsonObject root)
     {
-        return root.ContainsKey(LegacyAvailableSpinsPropertyName) || root.ContainsKey(LegacyLastResetTimestampPropertyName);
+        if (root.ContainsKey("availableSpins") || root.ContainsKey("lastResetTimestamp"))
+        {
+            return true;
+        }
+
+        if (!root.TryGetPropertyValue(FortuneWheelPropertyName, out var fortuneWheelNode) || fortuneWheelNode is not JsonObject fortuneWheel)
+        {
+            return false;
+        }
+
+        return fortuneWheel.Any(kvp => kvp.Key != AvailableSpinsPropertyName && kvp.Key != UpdatedAtPropertyName);
     }
 
     private static string BuildSaveReasons(
-        bool hasLegacyRootFields,
+        bool hasNonCanonicalWheelFields,
         bool timestampWasNormalized,
         bool timestampWasRepaired,
-        bool usedLegacyNestedTimestampKey,
         bool regenApplied,
         bool initializedDefaults)
     {
@@ -474,17 +490,12 @@ public sealed class WheelService : IWheelService
 
         if (timestampWasNormalized)
         {
-            reasons.Add("NormalizedTimestamp");
+            reasons.Add("NormalizedUpdatedAt");
         }
 
         if (timestampWasRepaired)
         {
-            reasons.Add("RepairedMissingTimestamp");
-        }
-
-        if (usedLegacyNestedTimestampKey)
-        {
-            reasons.Add("CanonicalizedLegacyNestedTimestampKey");
+            reasons.Add("RepairedMissingUpdatedAt");
         }
 
         if (regenApplied)
@@ -492,18 +503,18 @@ public sealed class WheelService : IWheelService
             reasons.Add("AppliedRegen");
         }
 
-        if (hasLegacyRootFields)
+        if (hasNonCanonicalWheelFields)
         {
-            reasons.Add("RemovedLegacyRootFields");
+            reasons.Add("RemovedNonCanonicalWheelFields");
         }
 
         return reasons.Count == 0 ? "None" : string.Join(", ", reasons);
     }
 
-    private static void SetState(JsonObject root, WheelState state)
+    private static void SetState(JsonObject root, FortuneWheelModuleSaveData state)
     {
-        root.Remove(LegacyAvailableSpinsPropertyName);
-        root.Remove(LegacyLastResetTimestampPropertyName);
+        root.Remove("availableSpins");
+        root.Remove("lastResetTimestamp");
 
         JsonObject fortuneWheel;
         if (root.TryGetPropertyValue(FortuneWheelPropertyName, out var fortuneWheelNode) && fortuneWheelNode is JsonObject existingFortuneWheel)
@@ -516,10 +527,16 @@ public sealed class WheelService : IWheelService
             root[FortuneWheelPropertyName] = fortuneWheel;
         }
 
+        state.NextUpdateAt = CalculateNextUpdateTimestamp(state.UpdatedAt);
+
         fortuneWheel[AvailableSpinsPropertyName] = state.AvailableSpins;
-        fortuneWheel[LastResetTimestampPropertyName] = state.LastResetTimestamp;
-        fortuneWheel.Remove(LegacyNestedAvailableSpinsPropertyName);
-        fortuneWheel.Remove(LegacyNestedLastResetTimestampPropertyName);
+        fortuneWheel[UpdatedAtPropertyName] = state.UpdatedAt;
+
+        // Canonical wheel payload is persisted with only AvailableSpins + UpdatedAt.
+        fortuneWheel.Remove("NextUpdateAt");
+        fortuneWheel.Remove("LastResetTimestamp");
+        fortuneWheel.Remove("lastResetTimestamp");
+        fortuneWheel.Remove("availableSpins");
     }
 
     private static int? TryGetInt(JsonObject root, string propertyName)
@@ -575,16 +592,9 @@ public sealed class WheelService : IWheelService
         public string Source { get; init; }
         public bool TimestampWasNormalized { get; init; }
         public bool TimestampWasRepaired { get; init; }
-        public bool UsedLegacyNestedTimestampKey { get; init; }
         public int? RawAvailableSpins { get; init; }
-        public long? RawLastResetTimestamp { get; init; }
-        public long? NormalizedLastResetTimestamp { get; init; }
+        public long? RawUpdatedAt { get; init; }
+        public long? NormalizedUpdatedAt { get; init; }
         public string? FailureReason { get; init; }
-    }
-
-    private struct WheelState
-    {
-        public int AvailableSpins { get; set; }
-        public long LastResetTimestamp { get; set; }
     }
 }

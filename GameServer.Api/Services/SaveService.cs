@@ -13,9 +13,7 @@ public sealed class SaveService : ISaveService
     private const int MaxSaveBytes = 30 * 1024;
     private const string FortuneWheelPropertyName = "FortuneWheel";
     private const string AvailableSpinsPropertyName = "AvailableSpins";
-    private const string LastResetTimestampPropertyName = "LastResetTimestamp";
-    private const string LegacyNestedAvailableSpinsPropertyName = "availableSpins";
-    private const string LegacyNestedLastResetTimestampPropertyName = "lastResetTimestamp";
+    private const string UpdatedAtPropertyName = "UpdatedAt";
 
     private readonly ISaveRepository _saveRepository;
     private readonly ISystemClock _clock;
@@ -166,13 +164,54 @@ public sealed class SaveService : ISaveService
 
     private void CanonicalizeWheelState(JsonObject incomingFortuneWheel, JsonObject? existingFortuneWheel, List<string> actions)
     {
-        if (!TryGetInt(incomingFortuneWheel, AvailableSpinsPropertyName, LegacyNestedAvailableSpinsPropertyName, out var availableSpins))
+        var now = _clock.UtcNowUnixMilliseconds;
+
+        var incomingState = ReadWheelState(incomingFortuneWheel, now);
+        var existingState = ReadWheelState(existingFortuneWheel, now);
+
+        var availableSpins = incomingState.AvailableSpins;
+        if (availableSpins is null && existingState.AvailableSpins is not null)
         {
-            if (TryGetInt(existingFortuneWheel, AvailableSpinsPropertyName, LegacyNestedAvailableSpinsPropertyName, out var existingSpins))
-            {
-                availableSpins = existingSpins;
-                actions.Add("MergedMissingAvailableSpinsFromExisting");
-            }
+            availableSpins = existingState.AvailableSpins;
+            actions.Add("MergedMissingAvailableSpinsFromExisting");
+        }
+
+        var updatedAt = incomingState.UpdatedAt;
+        if (updatedAt is null && existingState.UpdatedAt is not null)
+        {
+            updatedAt = existingState.UpdatedAt;
+            actions.Add("MergedMissingUpdatedAtFromExisting");
+        }
+
+        if (updatedAt is null)
+        {
+            updatedAt = now;
+            actions.Add("InitializedMissingUpdatedAtToNow");
+        }
+
+        if (incomingState.RawUpdatedAt is not null && incomingState.UpdatedAtWasNormalized)
+        {
+            actions.Add("NormalizedUpdatedAtFromSeconds");
+        }
+
+        if (incomingState.RawUpdatedAt is not null && incomingState.UpdatedAtWasInvalid)
+        {
+            actions.Add("IgnoredInvalidIncomingUpdatedAt");
+        }
+
+        if (incomingFortuneWheel.ContainsKey("NextUpdateAt"))
+        {
+            incomingFortuneWheel.Remove("NextUpdateAt");
+            actions.Add("RemovedClientNextUpdateAt");
+        }
+
+        var removedLegacy = false;
+        removedLegacy |= incomingFortuneWheel.Remove("LastResetTimestamp");
+        removedLegacy |= incomingFortuneWheel.Remove("lastResetTimestamp");
+        removedLegacy |= incomingFortuneWheel.Remove("availableSpins");
+        if (removedLegacy)
+        {
+            actions.Add("RemovedLegacyWheelKeys");
         }
 
         if (availableSpins is not null)
@@ -180,24 +219,78 @@ public sealed class SaveService : ISaveService
             incomingFortuneWheel[AvailableSpinsPropertyName] = availableSpins.Value;
         }
 
-        if (!TryGetLong(incomingFortuneWheel, LastResetTimestampPropertyName, LegacyNestedLastResetTimestampPropertyName, out var lastResetTimestamp))
+        incomingFortuneWheel[UpdatedAtPropertyName] = updatedAt.Value;
+    }
+
+    private static WheelSaveReadResult ReadWheelState(JsonObject? wheelNode, long now)
+    {
+        if (wheelNode is null)
         {
-            if (TryGetLong(existingFortuneWheel, LastResetTimestampPropertyName, LegacyNestedLastResetTimestampPropertyName, out var existingTimestamp))
+            return new WheelSaveReadResult();
+        }
+
+        var availableSpins = TryGetInt(wheelNode, AvailableSpinsPropertyName);
+        var rawUpdatedAt = TryGetLong(wheelNode, UpdatedAtPropertyName);
+        long? updatedAt = null;
+        var updatedAtWasNormalized = false;
+        var updatedAtWasInvalid = false;
+        if (rawUpdatedAt is not null)
+        {
+            if (TryNormalizeTimestamp(rawUpdatedAt.Value, now, out var normalizedUpdatedAt, out var wasNormalized))
             {
-                lastResetTimestamp = existingTimestamp;
-                actions.Add("MergedMissingTimestampFromExisting");
+                updatedAt = normalizedUpdatedAt;
+                updatedAtWasNormalized = wasNormalized;
             }
             else
             {
-                lastResetTimestamp = _clock.UtcNowUnixMilliseconds;
-                actions.Add("InitializedMissingTimestampToNow");
+                updatedAtWasInvalid = true;
             }
         }
 
-        var canonicalTimestamp = lastResetTimestamp ?? _clock.UtcNowUnixMilliseconds;
-        incomingFortuneWheel[LastResetTimestampPropertyName] = canonicalTimestamp;
-        incomingFortuneWheel.Remove(LegacyNestedAvailableSpinsPropertyName);
-        incomingFortuneWheel.Remove(LegacyNestedLastResetTimestampPropertyName);
+        return new WheelSaveReadResult
+        {
+            AvailableSpins = availableSpins,
+            RawUpdatedAt = rawUpdatedAt,
+            UpdatedAt = updatedAt,
+            UpdatedAtWasNormalized = updatedAtWasNormalized,
+            UpdatedAtWasInvalid = updatedAtWasInvalid
+        };
+    }
+
+    private static bool TryNormalizeTimestamp(long rawTimestamp, long now, out long normalizedTimestamp, out bool wasNormalized)
+    {
+        normalizedTimestamp = rawTimestamp;
+        wasNormalized = false;
+
+        if (rawTimestamp <= 0)
+        {
+            return false;
+        }
+
+        if (rawTimestamp <= 9_999_999_999)
+        {
+            if (rawTimestamp > long.MaxValue / 1000)
+            {
+                return false;
+            }
+
+            var converted = rawTimestamp * 1000;
+            if (converted > now)
+            {
+                return false;
+            }
+
+            normalizedTimestamp = converted;
+            wasNormalized = true;
+            return true;
+        }
+
+        if (rawTimestamp > now)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static bool TryParseRootObject(string payload, out JsonObject root)
@@ -232,18 +325,6 @@ public sealed class SaveService : ISaveService
             : null;
     }
 
-    private static bool TryGetInt(JsonObject? source, string primaryProperty, string fallbackProperty, out int? value)
-    {
-        value = source is null ? null : TryGetInt(source, primaryProperty);
-        if (value is not null)
-        {
-            return true;
-        }
-
-        value = source is null ? null : TryGetInt(source, fallbackProperty);
-        return value is not null;
-    }
-
     private static int? TryGetInt(JsonObject source, string propertyName)
     {
         if (!source.TryGetPropertyValue(propertyName, out var propertyValue) || propertyValue is null)
@@ -266,18 +347,6 @@ public sealed class SaveService : ISaveService
         return null;
     }
 
-    private static bool TryGetLong(JsonObject? source, string primaryProperty, string fallbackProperty, out long? value)
-    {
-        value = source is null ? null : TryGetLong(source, primaryProperty);
-        if (value is not null)
-        {
-            return true;
-        }
-
-        value = source is null ? null : TryGetLong(source, fallbackProperty);
-        return value is not null;
-    }
-
     private static long? TryGetLong(JsonObject source, string propertyName)
     {
         if (!source.TryGetPropertyValue(propertyName, out var propertyValue) || propertyValue is null)
@@ -298,5 +367,14 @@ public sealed class SaveService : ISaveService
         }
 
         return null;
+    }
+
+    private readonly struct WheelSaveReadResult
+    {
+        public int? AvailableSpins { get; init; }
+        public long? RawUpdatedAt { get; init; }
+        public long? UpdatedAt { get; init; }
+        public bool UpdatedAtWasNormalized { get; init; }
+        public bool UpdatedAtWasInvalid { get; init; }
     }
 }

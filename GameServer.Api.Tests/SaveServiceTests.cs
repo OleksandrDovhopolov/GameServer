@@ -13,9 +13,10 @@ public sealed class SaveServiceTests
     [Fact]
     public async Task Save_WhenIncomingOmitsFortuneWheel_PreservesExistingFortuneWheel()
     {
-        const long now = 1_700_000_000_000;
+        const long now = 1_700_000_001_000;
+        const long existingUpdatedAt = 1_700_000_000_123;
         var repository = new InMemorySaveRepository();
-        repository.Seed("p1", "{\"coins\":100,\"FortuneWheel\":{\"AvailableSpins\":7,\"LastResetTimestamp\":123}}");
+        repository.Seed("p1", $"{{\"coins\":100,\"FortuneWheel\":{{\"AvailableSpins\":7,\"UpdatedAt\":{existingUpdatedAt}}}}}");
         var service = CreateService(repository, now);
 
         await service.SaveAsync("p1", "{\"coins\":200}", CancellationToken.None);
@@ -23,15 +24,16 @@ public sealed class SaveServiceTests
         var saved = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         Assert.Equal(200, saved["coins"]!.GetValue<int>());
         Assert.Equal(7, GetFortuneWheel(saved)["AvailableSpins"]!.GetValue<int>());
-        Assert.Equal(123, GetFortuneWheel(saved)["LastResetTimestamp"]!.GetValue<long>());
+        Assert.Equal(existingUpdatedAt, GetFortuneWheel(saved)["UpdatedAt"]!.GetValue<long>());
     }
 
     [Fact]
-    public async Task Save_WhenIncomingFortuneWheelMissingTimestamp_MergesTimestampFromExisting()
+    public async Task Save_WhenIncomingFortuneWheelMissingUpdatedAt_MergesUpdatedAtFromExisting()
     {
-        const long now = 1_700_000_000_000;
+        const long now = 1_700_000_001_000;
+        const long existingUpdatedAt = 1_700_000_000_321;
         var repository = new InMemorySaveRepository();
-        repository.Seed("p1", "{\"FortuneWheel\":{\"AvailableSpins\":7,\"LastResetTimestamp\":321}}");
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":7,\"UpdatedAt\":{existingUpdatedAt}}}}}");
         var service = CreateService(repository, now);
 
         await service.SaveAsync("p1", "{\"coins\":500,\"FortuneWheel\":{\"AvailableSpins\":4}}", CancellationToken.None);
@@ -40,13 +42,11 @@ public sealed class SaveServiceTests
         var wheel = GetFortuneWheel(saved);
         Assert.Equal(500, saved["coins"]!.GetValue<int>());
         Assert.Equal(4, wheel["AvailableSpins"]!.GetValue<int>());
-        Assert.Equal(321, wheel["LastResetTimestamp"]!.GetValue<long>());
-        Assert.Null(wheel["availableSpins"]);
-        Assert.Null(wheel["lastResetTimestamp"]);
+        Assert.Equal(existingUpdatedAt, wheel["UpdatedAt"]!.GetValue<long>());
     }
 
     [Fact]
-    public async Task Save_WhenIncomingFortuneWheelMissingTimestampAndNoExisting_InitializesTimestampWithNow()
+    public async Task Save_WhenIncomingFortuneWheelMissingUpdatedAtAndNoExisting_InitializesUpdatedAtWithNow()
     {
         const long now = 1_700_000_000_000;
         var repository = new InMemorySaveRepository();
@@ -58,24 +58,58 @@ public sealed class SaveServiceTests
         var wheel = GetFortuneWheel(saved);
         Assert.Equal(1, saved["coins"]!.GetValue<int>());
         Assert.Equal(4, wheel["AvailableSpins"]!.GetValue<int>());
-        Assert.Equal(now, wheel["LastResetTimestamp"]!.GetValue<long>());
+        Assert.Equal(now, wheel["UpdatedAt"]!.GetValue<long>());
     }
 
     [Fact]
-    public async Task Save_WhenIncomingUsesLegacyNestedWheelKeys_CanonicalizesWheelFields()
+    public async Task Save_WhenIncomingContainsClientNextUpdateAt_RemovesIt()
     {
         const long now = 1_700_000_000_000;
         var repository = new InMemorySaveRepository();
         var service = CreateService(repository, now);
 
-        await service.SaveAsync("p1", "{\"FortuneWheel\":{\"AvailableSpins\":6,\"availableSpins\":5,\"lastResetTimestamp\":456}}", CancellationToken.None);
+        await service.SaveAsync("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":6,\"UpdatedAt\":{now - 1000},\"NextUpdateAt\":{now + 1000}}}}}", CancellationToken.None);
 
         var saved = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         var wheel = GetFortuneWheel(saved);
         Assert.Equal(6, wheel["AvailableSpins"]!.GetValue<int>());
-        Assert.Equal(456, wheel["LastResetTimestamp"]!.GetValue<long>());
-        Assert.Null(wheel["availableSpins"]);
+        Assert.Equal(now - 1000, wheel["UpdatedAt"]!.GetValue<long>());
+        Assert.Null(wheel["NextUpdateAt"]);
+    }
+
+    [Fact]
+    public async Task Save_WhenIncomingContainsLegacyWheelKeys_RemovesLegacyAndUsesCanonicalFields()
+    {
+        const long now = 1_700_000_000_000;
+        var repository = new InMemorySaveRepository();
+        var service = CreateService(repository, now);
+
+        await service.SaveAsync("p1", "{\"FortuneWheel\":{\"AvailableSpins\":6,\"LastResetTimestamp\":456,\"lastResetTimestamp\":789,\"availableSpins\":5}}", CancellationToken.None);
+
+        var saved = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
+        var wheel = GetFortuneWheel(saved);
+        Assert.Equal(6, wheel["AvailableSpins"]!.GetValue<int>());
+        Assert.Equal(now, wheel["UpdatedAt"]!.GetValue<long>());
+        Assert.Null(wheel["LastResetTimestamp"]);
         Assert.Null(wheel["lastResetTimestamp"]);
+        Assert.Null(wheel["availableSpins"]);
+    }
+
+    [Fact]
+    public async Task Save_WhenIncomingUpdatedAtIsSeconds_NormalizesToMilliseconds()
+    {
+        const long now = 1_700_000_000_000;
+        var updatedAtMs = now - 30_000;
+        var updatedAtSeconds = updatedAtMs / 1000;
+        var repository = new InMemorySaveRepository();
+        var service = CreateService(repository, now);
+
+        await service.SaveAsync("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":6,\"UpdatedAt\":{updatedAtSeconds}}}}}", CancellationToken.None);
+
+        var saved = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
+        var wheel = GetFortuneWheel(saved);
+        Assert.Equal(6, wheel["AvailableSpins"]!.GetValue<int>());
+        Assert.Equal(updatedAtMs, wheel["UpdatedAt"]!.GetValue<long>());
     }
 
     private static SaveService CreateService(InMemorySaveRepository repository, long now)
