@@ -8,9 +8,13 @@ namespace GameServer.Api.Services;
 public sealed class WheelService : IWheelService
 {
     private const int MaxAvailableSpins = 8;
+    private const string FortuneWheelPropertyName = "FortuneWheel";
+    private const string AvailableSpinsPropertyName = "AvailableSpins";
+    private const string LastResetTimestampPropertyName = "LastResetTimestamp";
+    private const string LegacyAvailableSpinsPropertyName = "availableSpins";
+    private const string LegacyLastResetTimestampPropertyName = "lastResetTimestamp";
     private static readonly TimeSpan RegenInterval = TimeSpan.FromMinutes(15);
     private static readonly long RegenIntervalMs = (long)RegenInterval.TotalMilliseconds;
-    private static readonly int DefaultNextRegenSeconds = (int)RegenInterval.TotalSeconds;
 
     private readonly ISaveRepository _saveRepository;
     private readonly IWheelRewardCatalog _rewardCatalog;
@@ -31,20 +35,30 @@ public sealed class WheelService : IWheelService
 
         var now = _clock.UtcNowUnixMilliseconds;
         var root = await LoadSaveDocumentAsync(playerId, cancellationToken);
-        if (!TryReadExistingState(root, now, out var state))
+        var hasExistingState = TryReadExistingState(root, now, out var state);
+        var stateChanged = HasLegacyRootWheelFields(root);
+        if (!hasExistingState)
         {
-            return new WheelStateResult
+            state = new WheelState
             {
                 AvailableSpins = MaxAvailableSpins,
-                NextRegenSeconds = DefaultNextRegenSeconds
+                LastResetTimestamp = now
             };
+            stateChanged = true;
         }
 
-        ApplyRegenIfNeeded(ref state, now);
+        stateChanged |= ApplyRegenIfNeeded(ref state, now);
+        if (stateChanged)
+        {
+            SetState(root, state);
+            await SaveDocumentAsync(playerId, root, cancellationToken);
+        }
+
         return new WheelStateResult
         {
             AvailableSpins = state.AvailableSpins,
-            NextRegenSeconds = CalculateNextRegenSeconds(state, now)
+            UpdatedAt = state.LastResetTimestamp,
+            NextUpdateAt = CalculateNextUpdateTimestamp(state)
         };
     }
 
@@ -61,7 +75,7 @@ public sealed class WheelService : IWheelService
         {
             SetState(root, state);
             await SaveDocumentAsync(playerId, root, cancellationToken);
-            throw new NoSpinsAvailableException(CalculateNextRegenSeconds(state, now));
+            throw new NoSpinsAvailableException(state.LastResetTimestamp, CalculateNextUpdateTimestamp(state));
         }
 
         var rewardId = _rewardCatalog.RollRewardId();
@@ -74,7 +88,8 @@ public sealed class WheelService : IWheelService
         {
             RewardId = rewardId,
             AvailableSpins = state.AvailableSpins,
-            NextRegenSeconds = CalculateNextRegenSeconds(state, now)
+            UpdatedAt = state.LastResetTimestamp,
+            NextUpdateAt = CalculateNextUpdateTimestamp(state)
         };
     }
 
@@ -119,8 +134,29 @@ public sealed class WheelService : IWheelService
 
     private static bool TryReadExistingState(JsonObject root, long now, out WheelState state)
     {
-        var availableSpins = TryGetInt(root, "availableSpins");
-        var lastResetTimestamp = TryGetLong(root, "lastResetTimestamp");
+        if (root.TryGetPropertyValue(FortuneWheelPropertyName, out var fortuneWheelNode))
+        {
+            if (fortuneWheelNode is not JsonObject fortuneWheel)
+            {
+                state = default;
+                return false;
+            }
+
+            return TryReadStateFromNode(fortuneWheel, AvailableSpinsPropertyName, LastResetTimestampPropertyName, now, out state);
+        }
+
+        return TryReadStateFromNode(root, LegacyAvailableSpinsPropertyName, LegacyLastResetTimestampPropertyName, now, out state);
+    }
+
+    private static bool TryReadStateFromNode(
+        JsonObject sourceNode,
+        string availableSpinsPropertyName,
+        string lastResetTimestampPropertyName,
+        long now,
+        out WheelState state)
+    {
+        var availableSpins = TryGetInt(sourceNode, availableSpinsPropertyName);
+        var lastResetTimestamp = TryGetLong(sourceNode, lastResetTimestampPropertyName);
         if (availableSpins is null ||
             availableSpins < 0 ||
             availableSpins > MaxAvailableSpins ||
@@ -140,38 +176,46 @@ public sealed class WheelService : IWheelService
         return true;
     }
 
-    private static void ApplyRegenIfNeeded(ref WheelState state, long now)
+    private static bool ApplyRegenIfNeeded(ref WheelState state, long now)
     {
         if (now - state.LastResetTimestamp < RegenIntervalMs)
         {
-            return;
+            return false;
         }
 
         state.AvailableSpins = MaxAvailableSpins;
         state.LastResetTimestamp = now;
+        return true;
     }
 
-    private static int CalculateNextRegenSeconds(WheelState state, long now)
+    private static long CalculateNextUpdateTimestamp(WheelState state)
     {
-        if (state.AvailableSpins >= MaxAvailableSpins)
-        {
-            return 0;
-        }
+        return state.LastResetTimestamp + RegenIntervalMs;
+    }
 
-        var elapsed = now - state.LastResetTimestamp;
-        var remainingMs = RegenIntervalMs - elapsed;
-        if (remainingMs <= 0)
-        {
-            return 0;
-        }
-
-        return (int)Math.Ceiling(remainingMs / 1000d);
+    private static bool HasLegacyRootWheelFields(JsonObject root)
+    {
+        return root.ContainsKey(LegacyAvailableSpinsPropertyName) || root.ContainsKey(LegacyLastResetTimestampPropertyName);
     }
 
     private static void SetState(JsonObject root, WheelState state)
     {
-        root["availableSpins"] = state.AvailableSpins;
-        root["lastResetTimestamp"] = state.LastResetTimestamp;
+        root.Remove(LegacyAvailableSpinsPropertyName);
+        root.Remove(LegacyLastResetTimestampPropertyName);
+
+        JsonObject fortuneWheel;
+        if (root.TryGetPropertyValue(FortuneWheelPropertyName, out var fortuneWheelNode) && fortuneWheelNode is JsonObject existingFortuneWheel)
+        {
+            fortuneWheel = existingFortuneWheel;
+        }
+        else
+        {
+            fortuneWheel = [];
+            root[FortuneWheelPropertyName] = fortuneWheel;
+        }
+
+        fortuneWheel[AvailableSpinsPropertyName] = state.AvailableSpins;
+        fortuneWheel[LastResetTimestampPropertyName] = state.LastResetTimestamp;
     }
 
     private static int? TryGetInt(JsonObject root, string propertyName)

@@ -2,11 +2,13 @@ namespace GameServer.Api.Services;
 
 public sealed class NoSpinsAvailableException : Exception
 {
-    public NoSpinsAvailableException(int nextRegenSeconds)
+    public NoSpinsAvailableException(long updatedAt, long nextUpdateAt)
         : base("No spins available.")
     {
-        NextRegenSeconds = nextRegenSeconds;
+        UpdatedAt = updatedAt;
+        NextUpdateAt = nextUpdateAt;
     }
 
-    public int NextRegenSeconds { get; }
+    public long UpdatedAt { get; }
+    public long NextUpdateAt { get; }
 }

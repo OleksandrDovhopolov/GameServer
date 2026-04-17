@@ -47,11 +47,18 @@ public sealed class WheelController : ControllerBase
         {
             try
             {
+                _logger.LogInformation("Wheel data request received.");
                 var result = await _wheelService.GetStateAsync(playerId, cancellationToken);
+                _logger.LogInformation(
+                    "Wheel data request succeeded. AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
+                    result.AvailableSpins,
+                    result.UpdatedAt,
+                    result.NextUpdateAt);
                 return Ok(new WheelDataResponse
                 {
                     AvailableSpins = result.AvailableSpins,
-                    NextRegenSeconds = result.NextRegenSeconds
+                    UpdatedAt = result.UpdatedAt,
+                    NextUpdateAt = result.NextUpdateAt
                 });
             }
             catch (ArgumentException ex)
@@ -79,12 +86,20 @@ public sealed class WheelController : ControllerBase
         {
             try
             {
+                _logger.LogInformation("Wheel spin request received.");
                 var result = await _wheelService.SpinAsync(request.PlayerId, cancellationToken);
+                _logger.LogInformation(
+                    "Wheel spin request succeeded. RewardId: {RewardId}, AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
+                    result.RewardId,
+                    result.AvailableSpins,
+                    result.UpdatedAt,
+                    result.NextUpdateAt);
                 return Ok(new WheelSpinResponse
                 {
                     RewardId = result.RewardId,
                     AvailableSpins = result.AvailableSpins,
-                    NextRegenSeconds = result.NextRegenSeconds
+                    UpdatedAt = result.UpdatedAt,
+                    NextUpdateAt = result.NextUpdateAt
                 });
             }
             catch (ArgumentException ex)
@@ -94,11 +109,15 @@ public sealed class WheelController : ControllerBase
             }
             catch (NoSpinsAvailableException ex)
             {
-                _logger.LogInformation("No spins available for player.");
+                _logger.LogInformation(
+                    "No spins available for player. UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
+                    ex.UpdatedAt,
+                    ex.NextUpdateAt);
                 return StatusCode(StatusCodes.Status403Forbidden, new WheelSpinBlockedResponse
                 {
                     Code = "NO_SPINS_AVAILABLE",
-                    NextRegenSeconds = ex.NextRegenSeconds
+                    UpdatedAt = ex.UpdatedAt,
+                    NextUpdateAt = ex.NextUpdateAt
                 });
             }
             catch (OperationCanceledException)
