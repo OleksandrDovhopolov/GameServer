@@ -9,6 +9,8 @@ namespace GameServer.Api.Tests;
 
 public sealed class WheelServiceTests
 {
+    private const long RegenIntervalMs = 2 * 60 * 1000;
+
     [Fact]
     public async Task GetState_WhenDataDoesNotExist_ReturnsConfiguredDefaults()
     {
@@ -20,7 +22,7 @@ public sealed class WheelServiceTests
 
         Assert.Equal(8, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
-        Assert.Equal(now + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
 
         var saved = repository.GetData("p1");
         var root = JsonNode.Parse(saved!)!.AsObject();
@@ -34,7 +36,7 @@ public sealed class WheelServiceTests
     public async Task GetState_WhenStateExists_ReturnsStoredSpinsAndTimestamps()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (14 * 60 * 1000);
+        var lastReset = now - (60 * 1000);
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", CreateFortuneWheelPayload(2, lastReset));
         var service = CreateService(repository, now);
@@ -43,14 +45,14 @@ public sealed class WheelServiceTests
 
         Assert.Equal(2, result.AvailableSpins);
         Assert.Equal(lastReset, result.UpdatedAt);
-        Assert.Equal(lastReset + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(lastReset + RegenIntervalMs, result.NextUpdateAt);
     }
 
     [Fact]
     public async Task Spin_WhenLessThanRegenInterval_DoesNotResetSpins()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (14 * 60 * 1000);
+        var lastReset = now - (60 * 1000);
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", CreateFortuneWheelPayload(2, lastReset));
         var service = CreateService(repository, now);
@@ -59,7 +61,7 @@ public sealed class WheelServiceTests
 
         Assert.Equal(1, result.AvailableSpins);
         Assert.Equal(lastReset, result.UpdatedAt);
-        Assert.Equal(lastReset + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(lastReset + RegenIntervalMs, result.NextUpdateAt);
 
         var saved = repository.GetData("p1");
         var root = JsonNode.Parse(saved!)!.AsObject();
@@ -73,7 +75,7 @@ public sealed class WheelServiceTests
     public async Task Spin_WhenExactlyAtRegenInterval_ResetsThenConsumesOneSpin()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (15 * 60 * 1000);
+        var lastReset = now - RegenIntervalMs;
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", CreateFortuneWheelPayload(0, lastReset));
         var service = CreateService(repository, now);
@@ -82,14 +84,14 @@ public sealed class WheelServiceTests
 
         Assert.Equal(7, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
-        Assert.Equal(now + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
     }
 
     [Fact]
     public async Task Spin_WhenGreaterThanRegenInterval_ResetsThenConsumesOneSpin()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (16 * 60 * 1000);
+        var lastReset = now - (RegenIntervalMs + 60 * 1000);
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", CreateFortuneWheelPayload(3, lastReset));
         var service = CreateService(repository, now);
@@ -98,7 +100,7 @@ public sealed class WheelServiceTests
 
         Assert.Equal(7, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
-        Assert.Equal(now + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
 
         var saved = repository.GetData("p1");
         var root = JsonNode.Parse(saved!)!.AsObject();
@@ -148,7 +150,7 @@ public sealed class WheelServiceTests
     public async Task Spin_WhenNoSpinsAvailable_ThrowsAndPersistsState()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (14 * 60 * 1000);
+        var lastReset = now - (60 * 1000);
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", CreateFortuneWheelPayload(0, lastReset));
         var service = CreateService(repository, now);
@@ -156,7 +158,7 @@ public sealed class WheelServiceTests
         var exception = await Assert.ThrowsAsync<NoSpinsAvailableException>(() => service.SpinAsync("p1", CancellationToken.None));
 
         Assert.Equal(lastReset, exception.UpdatedAt);
-        Assert.Equal(lastReset + 15 * 60 * 1000, exception.NextUpdateAt);
+        Assert.Equal(lastReset + RegenIntervalMs, exception.NextUpdateAt);
         var saved = repository.GetData("p1");
         var root = JsonNode.Parse(saved!)!.AsObject();
         Assert.Equal(0, GetFortuneWheel(root)["AvailableSpins"]!.GetValue<int>());
@@ -169,7 +171,7 @@ public sealed class WheelServiceTests
     public async Task GetState_WhenStoredSpinsAreFull_ReturnsFutureNextUpdateTimestamp()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (5 * 60 * 1000);
+        var lastReset = now - (60 * 1000);
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", CreateFortuneWheelPayload(8, lastReset));
         var service = CreateService(repository, now);
@@ -178,7 +180,7 @@ public sealed class WheelServiceTests
 
         Assert.Equal(8, result.AvailableSpins);
         Assert.Equal(lastReset, result.UpdatedAt);
-        Assert.Equal(lastReset + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(lastReset + RegenIntervalMs, result.NextUpdateAt);
     }
 
     [Fact]
@@ -193,7 +195,7 @@ public sealed class WheelServiceTests
 
         Assert.Equal(8, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
-        Assert.Equal(now + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
 
         var saved = repository.GetData("p1");
         var root = JsonNode.Parse(saved!)!.AsObject();
@@ -207,7 +209,7 @@ public sealed class WheelServiceTests
     public async Task Spin_WhenLegacyRootWheelFieldsExist_RemovesLegacyFieldsAndUsesFortuneWheel()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (5 * 60 * 1000);
+        var lastReset = now - (60 * 1000);
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":8,\"LastResetTimestamp\":{lastReset}}},\"availableSpins\":1,\"lastResetTimestamp\":1}}");
         var service = CreateService(repository, now);
@@ -229,7 +231,7 @@ public sealed class WheelServiceTests
     public async Task GetState_WhenLegacyRootWheelFieldsExist_RemovesLegacyFieldsAndUsesFortuneWheel()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (5 * 60 * 1000);
+        var lastReset = now - (60 * 1000);
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":7,\"LastResetTimestamp\":{lastReset}}},\"availableSpins\":8,\"lastResetTimestamp\":1}}");
         var service = CreateService(repository, now);
@@ -238,7 +240,7 @@ public sealed class WheelServiceTests
 
         Assert.Equal(7, result.AvailableSpins);
         Assert.Equal(lastReset, result.UpdatedAt);
-        Assert.Equal(lastReset + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(lastReset + RegenIntervalMs, result.NextUpdateAt);
 
         var saved = repository.GetData("p1");
         var root = JsonNode.Parse(saved!)!.AsObject();
@@ -249,26 +251,132 @@ public sealed class WheelServiceTests
     }
 
     [Fact]
-    public async Task GetState_WhenOnlyLegacyRootWheelFieldsExist_MigratesToFortuneWheelWithoutReset()
+    public async Task GetState_WhenOnlyLegacyRootWheelFieldsExistInSeconds_MigratesToFortuneWheelWithoutReset()
     {
         const long now = 1_700_000_000_000;
-        var lastReset = now - (5 * 60 * 1000);
+        var lastResetMs = now - (60 * 1000);
+        var lastResetSeconds = lastResetMs / 1000;
         var repository = new InMemorySaveRepository();
-        repository.Seed("p1", $"{{\"availableSpins\":3,\"lastResetTimestamp\":{lastReset}}}");
+        repository.Seed("p1", $"{{\"availableSpins\":3,\"lastResetTimestamp\":{lastResetSeconds}}}");
         var service = CreateService(repository, now);
 
         var result = await service.GetStateAsync("p1", CancellationToken.None);
 
         Assert.Equal(3, result.AvailableSpins);
-        Assert.Equal(lastReset, result.UpdatedAt);
-        Assert.Equal(lastReset + 15 * 60 * 1000, result.NextUpdateAt);
+        Assert.Equal(lastResetMs, result.UpdatedAt);
+        Assert.Equal(lastResetMs + RegenIntervalMs, result.NextUpdateAt);
 
         var saved = repository.GetData("p1");
         var root = JsonNode.Parse(saved!)!.AsObject();
         Assert.Equal(3, GetFortuneWheel(root)["AvailableSpins"]!.GetValue<int>());
-        Assert.Equal(lastReset, GetFortuneWheel(root)["LastResetTimestamp"]!.GetValue<long>());
+        Assert.Equal(lastResetMs, GetFortuneWheel(root)["LastResetTimestamp"]!.GetValue<long>());
         Assert.Null(root["availableSpins"]);
         Assert.Null(root["lastResetTimestamp"]);
+    }
+
+    [Fact]
+    public async Task GetState_WhenFortuneWheelTimestampIsSeconds_ConvertsAndPersistsWithoutReset()
+    {
+        const long now = 1_700_000_000_000;
+        var lastResetMs = now - (60 * 1000);
+        var lastResetSeconds = lastResetMs / 1000;
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":4,\"LastResetTimestamp\":{lastResetSeconds}}}}}");
+        var service = CreateService(repository, now);
+
+        var result = await service.GetStateAsync("p1", CancellationToken.None);
+
+        Assert.Equal(4, result.AvailableSpins);
+        Assert.Equal(lastResetMs, result.UpdatedAt);
+        Assert.Equal(lastResetMs + RegenIntervalMs, result.NextUpdateAt);
+
+        var saved = repository.GetData("p1");
+        var root = JsonNode.Parse(saved!)!.AsObject();
+        Assert.Equal(lastResetMs, GetFortuneWheel(root)["LastResetTimestamp"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public async Task Spin_WhenFortuneWheelTimestampIsSeconds_ConvertsAndPersistsWithoutReset()
+    {
+        const long now = 1_700_000_000_000;
+        var lastResetMs = now - (60 * 1000);
+        var lastResetSeconds = lastResetMs / 1000;
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":2,\"LastResetTimestamp\":{lastResetSeconds}}}}}");
+        var service = CreateService(repository, now);
+
+        var result = await service.SpinAsync("p1", CancellationToken.None);
+
+        Assert.Equal(1, result.AvailableSpins);
+        Assert.Equal(lastResetMs, result.UpdatedAt);
+        Assert.Equal(lastResetMs + RegenIntervalMs, result.NextUpdateAt);
+
+        var saved = repository.GetData("p1");
+        var root = JsonNode.Parse(saved!)!.AsObject();
+        Assert.Equal(1, GetFortuneWheel(root)["AvailableSpins"]!.GetValue<int>());
+        Assert.Equal(lastResetMs, GetFortuneWheel(root)["LastResetTimestamp"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public async Task GetState_WhenFortuneWheelTimestampIsFuture_FallsBackToDefaults()
+    {
+        const long now = 1_700_000_000_000;
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":4,\"LastResetTimestamp\":{now + 1_000}}}}}");
+        var service = CreateService(repository, now);
+
+        var result = await service.GetStateAsync("p1", CancellationToken.None);
+
+        Assert.Equal(8, result.AvailableSpins);
+        Assert.Equal(now, result.UpdatedAt);
+        Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+
+        var saved = repository.GetData("p1");
+        var root = JsonNode.Parse(saved!)!.AsObject();
+        Assert.Equal(8, GetFortuneWheel(root)["AvailableSpins"]!.GetValue<int>());
+        Assert.Equal(now, GetFortuneWheel(root)["LastResetTimestamp"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public async Task GetState_WhenFortuneWheelMissingTimestamp_RepairsWithNowAndKeepsSpins()
+    {
+        const long now = 1_700_000_000_000;
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", "{\"FortuneWheel\":{\"AvailableSpins\":7}}");
+        var service = CreateService(repository, now);
+
+        var result = await service.GetStateAsync("p1", CancellationToken.None);
+
+        Assert.Equal(7, result.AvailableSpins);
+        Assert.Equal(now, result.UpdatedAt);
+        Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+
+        var saved = repository.GetData("p1");
+        var root = JsonNode.Parse(saved!)!.AsObject();
+        Assert.Equal(7, GetFortuneWheel(root)["AvailableSpins"]!.GetValue<int>());
+        Assert.Equal(now, GetFortuneWheel(root)["LastResetTimestamp"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public async Task GetState_WhenFortuneWheelUsesLegacyNestedTimestamp_CanonicalizesKey()
+    {
+        const long now = 1_700_000_000_000;
+        var lastReset = now - (60 * 1000);
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":6,\"lastResetTimestamp\":{lastReset}}}}}");
+        var service = CreateService(repository, now);
+
+        var result = await service.GetStateAsync("p1", CancellationToken.None);
+
+        Assert.Equal(6, result.AvailableSpins);
+        Assert.Equal(lastReset, result.UpdatedAt);
+        Assert.Equal(lastReset + RegenIntervalMs, result.NextUpdateAt);
+
+        var saved = repository.GetData("p1");
+        var root = JsonNode.Parse(saved!)!.AsObject();
+        var fortuneWheel = GetFortuneWheel(root);
+        Assert.Equal(lastReset, fortuneWheel["LastResetTimestamp"]!.GetValue<long>());
+        Assert.Null(fortuneWheel["lastResetTimestamp"]);
     }
 
     private static string CreateFortuneWheelPayload(int availableSpins, long lastResetTimestamp)

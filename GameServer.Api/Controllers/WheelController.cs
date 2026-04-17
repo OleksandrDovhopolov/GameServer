@@ -2,6 +2,7 @@ using GameServer.Api.Models.Dto.Wheel;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using System.Diagnostics;
 
 namespace GameServer.Api.Controllers;
 
@@ -45,15 +46,22 @@ public sealed class WheelController : ControllerBase
     {
         using (_logger.BeginScope(new Dictionary<string, object> { ["PlayerId"] = playerId }))
         {
+            var stopwatch = Stopwatch.StartNew();
+            var traceId = HttpContext.TraceIdentifier;
             try
             {
-                _logger.LogInformation("Wheel data request received.");
+                _logger.LogInformation(
+                    "Wheel data request received. TraceId: {TraceId}, CancellationRequested: {CancellationRequested}",
+                    traceId,
+                    cancellationToken.IsCancellationRequested);
                 var result = await _wheelService.GetStateAsync(playerId, cancellationToken);
                 _logger.LogInformation(
-                    "Wheel data request succeeded. AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
+                    "Wheel data request succeeded. TraceId: {TraceId}, AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, ElapsedMs: {ElapsedMs}",
+                    traceId,
                     result.AvailableSpins,
                     result.UpdatedAt,
-                    result.NextUpdateAt);
+                    result.NextUpdateAt,
+                    stopwatch.ElapsedMilliseconds);
                 return Ok(new WheelDataResponse
                 {
                     AvailableSpins = result.AvailableSpins,
@@ -63,17 +71,17 @@ public sealed class WheelController : ControllerBase
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Wheel data request validation failed.");
+                _logger.LogWarning(ex, "Wheel data request validation failed. TraceId: {TraceId}, ElapsedMs: {ElapsedMs}", traceId, stopwatch.ElapsedMilliseconds);
                 return BadRequest(ex.Message);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning("Wheel data request canceled.");
+                _logger.LogWarning("Wheel data request canceled. TraceId: {TraceId}, ElapsedMs: {ElapsedMs}", traceId, stopwatch.ElapsedMilliseconds);
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Wheel data request failed.");
+                _logger.LogError(ex, "Wheel data request failed. TraceId: {TraceId}, ElapsedMs: {ElapsedMs}", traceId, stopwatch.ElapsedMilliseconds);
                 return StatusCode(StatusCodes.Status500InternalServerError, "Internal error while loading wheel data.");
             }
         }
@@ -84,16 +92,23 @@ public sealed class WheelController : ControllerBase
     {
         using (_logger.BeginScope(new Dictionary<string, object> { ["PlayerId"] = request.PlayerId }))
         {
+            var stopwatch = Stopwatch.StartNew();
+            var traceId = HttpContext.TraceIdentifier;
             try
             {
-                _logger.LogInformation("Wheel spin request received.");
+                _logger.LogInformation(
+                    "Wheel spin request received. TraceId: {TraceId}, CancellationRequested: {CancellationRequested}",
+                    traceId,
+                    cancellationToken.IsCancellationRequested);
                 var result = await _wheelService.SpinAsync(request.PlayerId, cancellationToken);
                 _logger.LogInformation(
-                    "Wheel spin request succeeded. RewardId: {RewardId}, AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
+                    "Wheel spin request succeeded. TraceId: {TraceId}, RewardId: {RewardId}, AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, ElapsedMs: {ElapsedMs}",
+                    traceId,
                     result.RewardId,
                     result.AvailableSpins,
                     result.UpdatedAt,
-                    result.NextUpdateAt);
+                    result.NextUpdateAt,
+                    stopwatch.ElapsedMilliseconds);
                 return Ok(new WheelSpinResponse
                 {
                     RewardId = result.RewardId,
@@ -104,15 +119,17 @@ public sealed class WheelController : ControllerBase
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Wheel spin request validation failed.");
+                _logger.LogWarning(ex, "Wheel spin request validation failed. TraceId: {TraceId}, ElapsedMs: {ElapsedMs}", traceId, stopwatch.ElapsedMilliseconds);
                 return BadRequest(ex.Message);
             }
             catch (NoSpinsAvailableException ex)
             {
                 _logger.LogInformation(
-                    "No spins available for player. UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}",
+                    "No spins available for player. TraceId: {TraceId}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, ElapsedMs: {ElapsedMs}",
+                    traceId,
                     ex.UpdatedAt,
-                    ex.NextUpdateAt);
+                    ex.NextUpdateAt,
+                    stopwatch.ElapsedMilliseconds);
                 return StatusCode(StatusCodes.Status403Forbidden, new WheelSpinBlockedResponse
                 {
                     Code = "NO_SPINS_AVAILABLE",
@@ -122,12 +139,12 @@ public sealed class WheelController : ControllerBase
             }
             catch (OperationCanceledException)
             {
-                _logger.LogWarning("Wheel spin request canceled.");
+                _logger.LogWarning("Wheel spin request canceled. TraceId: {TraceId}, ElapsedMs: {ElapsedMs}", traceId, stopwatch.ElapsedMilliseconds);
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Wheel spin request failed.");
+                _logger.LogError(ex, "Wheel spin request failed. TraceId: {TraceId}, ElapsedMs: {ElapsedMs}", traceId, stopwatch.ElapsedMilliseconds);
                 return StatusCode(StatusCodes.Status500InternalServerError, "Internal error while executing wheel spin.");
             }
         }
