@@ -1,0 +1,92 @@
+{
+  "rewards": [
+    {
+      "rewardId": "Lazurite_Pack",
+      "source": "wheel",
+      "parts": [
+        {
+          "kind": 2,
+          "targetId": "Lazurite_Pack",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "rewardId": "Bronze_Pack",
+      "source": "wheel",
+      "parts": [
+        {
+          "kind": 2,
+          "targetId": "Bronze_Pack",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "rewardId": "Emerald_Pack",
+      "source": "wheel",
+      "parts": [
+        {
+          "kind": 2,
+          "targetId": "Emerald_Pack",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "rewardId": "Sapphire_Pack",
+      "source": "wheel",
+      "parts": [
+        {
+          "kind": 2,
+          "targetId": "Sapphire_Pack",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "rewardId": "Ruby_Pack",
+      "source": "wheel",
+      "parts": [
+        {
+          "kind": 2,
+          "targetId": "Ruby_Pack",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "rewardId": "Gems",
+      "source": "wheel",
+      "parts": [
+        {
+          "kind": 1,
+          "targetId": "Gems",
+          "amount": 10
+        }
+      ]
+    },
+    {
+      "rewardId": "Energy",
+      "source": "wheel",
+      "parts": [
+        {
+          "kind": 1,
+          "targetId": "Energy",
+          "amount": 15
+        }
+      ]
+    },
+    {
+      "rewardId": "Gold",
+      "source": "wheel",
+      "parts": [
+        {
+          "kind": 1,
+          "targetId": "Gold",
+          "amount": 500
+        }
+      ]
+    }
+  ]
+}

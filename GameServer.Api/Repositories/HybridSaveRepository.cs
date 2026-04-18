@@ -9,7 +9,6 @@ namespace GameServer.Api.Repositories;
 
 public sealed class HybridSaveRepository : ISaveRepository
 {
-    private static readonly TimeSpan RedisTtl = TimeSpan.FromHours(24);
     private const string DefaultSaveData = "";
 
     private readonly IDatabase _database;
@@ -211,12 +210,11 @@ public sealed class HybridSaveRepository : ISaveRepository
         var saveKey = GetSaveKey(playerId);
         var metaKey = GetMetaKey(playerId);
 
-        // Save both values with the same TTL so the cache can evict cleanly.
-        var setSaveTask = _database.StringSetAsync(saveKey, data, RedisTtl);
+        // Save both values without expiration; player state is durable.
+        var setSaveTask = _database.StringSetAsync(saveKey, data);
         var setMetaTask = _database.StringSetAsync(
             metaKey,
-            lastModified.ToString(CultureInfo.InvariantCulture),
-            RedisTtl);
+            lastModified.ToString(CultureInfo.InvariantCulture));
 
         await Task.WhenAll(setSaveTask, setMetaTask).WaitAsync(cancellationToken);
     }

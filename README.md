@@ -30,12 +30,12 @@ PetGameServer
 ```
 3. Verify PostgreSQL row was updated:
    - `docker compose exec postgres psql -U postgres -d game_server -c "select player_id, save_data, last_modified_at from player_saves where player_id = 'test-player-1';"`
-4. Verify Redis keys were updated (and have TTL):
+4. Verify Redis keys were updated:
    - Run a Redis CLI (optional): `docker compose exec redis redis-cli`
    - Check:
-     - `TTL save:test-player-1`
-     - `TTL save:test-player-1:meta`
+     - `GET save:test-player-1`
+     - `GET save:test-player-1:meta`
 
 ### Notes
 - Hybrid load returns default state if both Redis and PostgreSQL misses/failures occur.
-- The coordinator caches using a fixed 24-hour TTL on both `save:{playerId}` and `save:{playerId}:meta`.
+- Player save and metadata keys are persisted without expiration.

@@ -18,7 +18,6 @@ public sealed class RedisSaveRepository : ISaveRepository
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var ttl = TimeSpan.FromHours(24);
         var lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var transaction = _database.CreateTransaction();
 
@@ -30,10 +29,6 @@ public sealed class RedisSaveRepository : ISaveRepository
         {
             throw new InvalidOperationException("Redis transaction failed while saving player data.");
         }
-
-        // Enforce cache eviction for active/inactive saves.
-        await _database.KeyExpireAsync(GetSaveKey(playerId), ttl).WaitAsync(cancellationToken);
-        await _database.KeyExpireAsync(GetMetaKey(playerId), ttl).WaitAsync(cancellationToken);
     }
 
     public async Task<SaveRecord?> LoadAsync(string playerId, CancellationToken cancellationToken)

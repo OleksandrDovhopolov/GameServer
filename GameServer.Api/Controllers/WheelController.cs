@@ -114,7 +114,8 @@ public sealed class WheelController : ControllerBase
                     RewardId = result.RewardId,
                     AvailableSpins = result.AvailableSpins,
                     UpdatedAt = result.UpdatedAt,
-                    NextUpdateAt = result.NextUpdateAt
+                    NextUpdateAt = result.NextUpdateAt,
+                    RewardGrant = result.RewardGrant
                 });
             }
             catch (ArgumentException ex)

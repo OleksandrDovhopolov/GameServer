@@ -56,6 +56,11 @@ builder.Services.AddScoped<RedisSaveRepository>();
 builder.Services.AddScoped<PostgreSqlSaveRepository>();
 builder.Services.AddScoped<ISaveRepository, HybridSaveRepository>();
 builder.Services.AddScoped<ISaveService, SaveService>();
+builder.Services.AddSingleton<IRewardDefinitionRepository, RewardDefinitionRepository>();
+builder.Services.AddScoped<IRewardPartApplier, RewardPartApplier>();
+builder.Services.AddScoped<IRewardHandler, ResourceRewardHandler>();
+builder.Services.AddScoped<IRewardHandler, InventoryRewardHandler>();
+builder.Services.AddScoped<IRewardApplicationService, RewardApplicationService>();
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 builder.Services.AddScoped<AdminBasicAuthFilter>();
 builder.Services.AddSingleton<IRandomGenerator, RandomGenerator>();
@@ -101,6 +106,7 @@ await using (var scope = app.Services.CreateAsyncScope())
 
 // Force reward catalog initialization at startup so invalid configuration fails fast.
 app.Services.GetRequiredService<IWheelRewardCatalog>();
+app.Services.GetRequiredService<IRewardDefinitionRepository>();
 
 if (!app.Environment.IsDevelopment())
 {

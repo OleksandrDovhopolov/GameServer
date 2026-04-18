@@ -18,3 +18,14 @@ Content-Type: application/json
 }
 
 ###
+
+POST {{GameServer.Api_HostAddress}}/api/v1/rewards/grant
+Content-Type: application/json
+
+{
+  "playerId": "test-player-1",
+  "rewardSource": "wheel",
+  "rewardId": "Gold"
+}
+
+###
