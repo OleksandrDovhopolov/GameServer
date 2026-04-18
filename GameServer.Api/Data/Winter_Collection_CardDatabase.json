@@ -1,0 +1,1204 @@
+{
+  "cards": [
+    {
+      "id": "1",
+      "cardName": "Seeds",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_1"
+    },
+    {
+      "id": "2",
+      "cardName": "Sunflowers",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_2"
+    },
+    {
+      "id": "3",
+      "cardName": "Milk Crate",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_3"
+    },
+    {
+      "id": "4",
+      "cardName": "Chick",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_4"
+    },
+    {
+      "id": "5",
+      "cardName": "Pumpkin Cart",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_5"
+    },
+    {
+      "id": "6",
+      "cardName": "Barn Boots",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_6"
+    },
+    {
+      "id": "7",
+      "cardName": "Barn",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_7"
+    },
+    {
+      "id": "8",
+      "cardName": "Well",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_8"
+    },
+    {
+      "id": "9",
+      "cardName": "Sickle",
+      "groupType": "farming",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_9"
+    },
+    {
+      "id": "10",
+      "cardName": "Tractor",
+      "groupType": "farming",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_10"
+    },
+    {
+      "id": "11",
+      "cardName": "Saw",
+      "groupType": "worksite",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_11"
+    },
+    {
+      "id": "12",
+      "cardName": "Wheelbarrow",
+      "groupType": "worksite",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_12"
+    },
+    {
+      "id": "13",
+      "cardName": "Crane Hook",
+      "groupType": "worksite",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_13"
+    },
+    {
+      "id": "14",
+      "cardName": "Traffic Cone",
+      "groupType": "worksite",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_14"
+    },
+    {
+      "id": "15",
+      "cardName": "Gloves",
+      "groupType": "worksite",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_15"
+    },
+    {
+      "id": "16",
+      "cardName": "Hard Hat",
+      "groupType": "worksite",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_16"
+    },
+    {
+      "id": "17",
+      "cardName": "Blueprint",
+      "groupType": "worksite",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_17"
+    },
+    {
+      "id": "18",
+      "cardName": "Tape Measure",
+      "groupType": "worksite",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_18"
+    },
+    {
+      "id": "19",
+      "cardName": "Asphalt Roller",
+      "groupType": "worksite",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_19"
+    },
+    {
+      "id": "20",
+      "cardName": "Lunchbox",
+      "groupType": "worksite",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_20"
+    },
+    {
+      "id": "21",
+      "cardName": "Railroad Lights",
+      "groupType": "railroads",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_21"
+    },
+    {
+      "id": "22",
+      "cardName": "Railroad Sign",
+      "groupType": "railroads",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_22"
+    },
+    {
+      "id": "23",
+      "cardName": "Bench",
+      "groupType": "railroads",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_23"
+    },
+    {
+      "id": "24",
+      "cardName": "Compartment",
+      "groupType": "railroads",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_24"
+    },
+    {
+      "id": "25",
+      "cardName": "Luggage",
+      "groupType": "railroads",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_25"
+    },
+    {
+      "id": "26",
+      "cardName": "Railroad Bell",
+      "groupType": "railroads",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_26"
+    },
+    {
+      "id": "27",
+      "cardName": "Tunnel",
+      "groupType": "railroads",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_27"
+    },
+    {
+      "id": "28",
+      "cardName": "Tickets",
+      "groupType": "railroads",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_28"
+    },
+    {
+      "id": "29",
+      "cardName": "Station",
+      "groupType": "railroads",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_29"
+    },
+    {
+      "id": "30",
+      "cardName": "Locomotive",
+      "groupType": "railroads",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_30"
+    },
+    {
+      "id": "31",
+      "cardName": "Uniform",
+      "groupType": "factories",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_31"
+    },
+    {
+      "id": "32",
+      "cardName": "Control Panel",
+      "groupType": "factories",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_32"
+    },
+    {
+      "id": "33",
+      "cardName": "Storage Boxes",
+      "groupType": "factories",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_33"
+    },
+    {
+      "id": "34",
+      "cardName": "Smokestacks",
+      "groupType": "factories",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_34"
+    },
+    {
+      "id": "35",
+      "cardName": "Gears",
+      "groupType": "factories",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_35"
+    },
+    {
+      "id": "36",
+      "cardName": "Tanks",
+      "groupType": "factories",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_36"
+    },
+    {
+      "id": "37",
+      "cardName": "Pallets",
+      "groupType": "factories",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_37"
+    },
+    {
+      "id": "38",
+      "cardName": "Forklift",
+      "groupType": "factories",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_38"
+    },
+    {
+      "id": "39",
+      "cardName": "Conveyor Belt",
+      "groupType": "factories",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_39"
+    },
+    {
+      "id": "40",
+      "cardName": "Factory",
+      "groupType": "factories",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_40"
+    },
+    {
+      "id": "41",
+      "cardName": "Satellite Dish",
+      "groupType": "next door",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_41"
+    },
+    {
+      "id": "42",
+      "cardName": "Laundry",
+      "groupType": "next door",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_42"
+    },
+    {
+      "id": "43",
+      "cardName": "Mailbox",
+      "groupType": "next door",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_43"
+    },
+    {
+      "id": "44",
+      "cardName": "Basketball Hoop",
+      "groupType": "next door",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_44"
+    },
+    {
+      "id": "45",
+      "cardName": "Birdhouse",
+      "groupType": "next door",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_45"
+    },
+    {
+      "id": "46",
+      "cardName": "Slide",
+      "groupType": "next door",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_46"
+    },
+    {
+      "id": "47",
+      "cardName": "Grill",
+      "groupType": "next door",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_47"
+    },
+    {
+      "id": "48",
+      "cardName": "Bike Rack",
+      "groupType": "next door",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_48"
+    },
+    {
+      "id": "49",
+      "cardName": "Garage Sale",
+      "groupType": "next door",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_49"
+    },
+    {
+      "id": "50",
+      "cardName": "Fire Hydrant",
+      "groupType": "next door",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_50"
+    },
+    {
+      "id": "51",
+      "cardName": "Mailbox",
+      "groupType": "delivery",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_51"
+    },
+    {
+      "id": "52",
+      "cardName": "Scooter",
+      "groupType": "delivery",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_52"
+    },
+    {
+      "id": "53",
+      "cardName": "Mail Bag",
+      "groupType": "delivery",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_53"
+    },
+    {
+      "id": "54",
+      "cardName": "Plane",
+      "groupType": "delivery",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_54"
+    },
+    {
+      "id": "55",
+      "cardName": "Control Tower",
+      "groupType": "delivery",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_55"
+    },
+    {
+      "id": "56",
+      "cardName": "City Map",
+      "groupType": "delivery",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_56"
+    },
+    {
+      "id": "57",
+      "cardName": "Ship",
+      "groupType": "delivery",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_57"
+    },
+    {
+      "id": "58",
+      "cardName": "Port",
+      "groupType": "delivery",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_58"
+    },
+    {
+      "id": "59",
+      "cardName": "Post Office",
+      "groupType": "delivery",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_59"
+    },
+    {
+      "id": "60",
+      "cardName": "Helicopter",
+      "groupType": "delivery",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_60"
+    },
+    {
+      "id": "61",
+      "cardName": "Pickaxe",
+      "groupType": "mining",
+      "stars": 1,
+      "premiumCard": false,
+      "icon": "card_61"
+    },
+    {
+      "id": "62",
+      "cardName": "Gold Bars",
+      "groupType": "mining",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_62"
+    },
+    {
+      "id": "63",
+      "cardName": "Dynamite",
+      "groupType": "mining",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_63"
+    },
+    {
+      "id": "64",
+      "cardName": "Lantern",
+      "groupType": "mining",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_64"
+    },
+    {
+      "id": "65",
+      "cardName": "Mine Cart",
+      "groupType": "mining",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_65"
+    },
+    {
+      "id": "66",
+      "cardName": "Gem",
+      "groupType": "mining",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_66"
+    },
+    {
+      "id": "67",
+      "cardName": "Mine",
+      "groupType": "mining",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_67"
+    },
+    {
+      "id": "68",
+      "cardName": "Relic",
+      "groupType": "mining",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_68"
+    },
+    {
+      "id": "69",
+      "cardName": "Foundry",
+      "groupType": "mining",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_69"
+    },
+    {
+      "id": "70",
+      "cardName": "Drilling",
+      "groupType": "mining",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_70"
+    },
+    {
+      "id": "71",
+      "cardName": "Blanket",
+      "groupType": "picnic",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_71"
+    },
+    {
+      "id": "72",
+      "cardName": "Basket",
+      "groupType": "picnic",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_72"
+    },
+    {
+      "id": "73",
+      "cardName": "Frisbee",
+      "groupType": "picnic",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_73"
+    },
+    {
+      "id": "74",
+      "cardName": "Shuttlecock",
+      "groupType": "picnic",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_74"
+    },
+    {
+      "id": "75",
+      "cardName": "Umbrella",
+      "groupType": "picnic",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_75"
+    },
+    {
+      "id": "76",
+      "cardName": "Strawberries",
+      "groupType": "picnic",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_76"
+    },
+    {
+      "id": "77",
+      "cardName": "Kite",
+      "groupType": "picnic",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_77"
+    },
+    {
+      "id": "78",
+      "cardName": "Lemonade",
+      "groupType": "picnic",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_78"
+    },
+    {
+      "id": "79",
+      "cardName": "Grill",
+      "groupType": "picnic",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_79"
+    },
+    {
+      "id": "80",
+      "cardName": "Picnic",
+      "groupType": "picnic",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_80"
+    },
+    {
+      "id": "81",
+      "cardName": "Veggie Stall",
+      "groupType": "farm store",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_81"
+    },
+    {
+      "id": "82",
+      "cardName": "Cheese Wedge",
+      "groupType": "farm store",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_82"
+    },
+    {
+      "id": "83",
+      "cardName": "Wine Barrel",
+      "groupType": "farm store",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_83"
+    },
+    {
+      "id": "84",
+      "cardName": "Oil Bottle",
+      "groupType": "farm store",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_84"
+    },
+    {
+      "id": "85",
+      "cardName": "Apple Crate",
+      "groupType": "farm store",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_85"
+    },
+    {
+      "id": "86",
+      "cardName": "Berry Basket",
+      "groupType": "farm store",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_86"
+    },
+    {
+      "id": "87",
+      "cardName": "Carrots",
+      "groupType": "farm store",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_87"
+    },
+    {
+      "id": "88",
+      "cardName": "Green Onions",
+      "groupType": "farm store",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_88"
+    },
+    {
+      "id": "89",
+      "cardName": "Tomatoes",
+      "groupType": "farm store",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_89"
+    },
+    {
+      "id": "90",
+      "cardName": "Market",
+      "groupType": "farm store",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_90"
+    },
+    {
+      "id": "91",
+      "cardName": "Dog",
+      "groupType": "animals",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_91"
+    },
+    {
+      "id": "92",
+      "cardName": "Bees",
+      "groupType": "animals",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_92"
+    },
+    {
+      "id": "93",
+      "cardName": "Chicken",
+      "groupType": "animals",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_93"
+    },
+    {
+      "id": "94",
+      "cardName": "Cow",
+      "groupType": "animals",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_94"
+    },
+    {
+      "id": "95",
+      "cardName": "Rooster",
+      "groupType": "animals",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_95"
+    },
+    {
+      "id": "96",
+      "cardName": "Rabbit",
+      "groupType": "animals",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_96"
+    },
+    {
+      "id": "97",
+      "cardName": "Duck",
+      "groupType": "animals",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_97"
+    },
+    {
+      "id": "98",
+      "cardName": "Otter",
+      "groupType": "animals",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_98"
+    },
+    {
+      "id": "99",
+      "cardName": "Horse",
+      "groupType": "animals",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_99"
+    },
+    {
+      "id": "100",
+      "cardName": "Pig",
+      "groupType": "animals",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_100"
+    },
+    {
+      "id": "101",
+      "cardName": "Amphora",
+      "groupType": "museum",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_101"
+    },
+    {
+      "id": "102",
+      "cardName": "Compass",
+      "groupType": "museum",
+      "stars": 2,
+      "premiumCard": false,
+      "icon": "card_102"
+    },
+    {
+      "id": "103",
+      "cardName": "Manuscript",
+      "groupType": "museum",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_103"
+    },
+    {
+      "id": "104",
+      "cardName": "Pharaoh’s Mask",
+      "groupType": "museum",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_104"
+    },
+    {
+      "id": "105",
+      "cardName": "Treasure Chest",
+      "groupType": "museum",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_105"
+    },
+    {
+      "id": "106",
+      "cardName": "Meteorite",
+      "groupType": "museum",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_106"
+    },
+    {
+      "id": "107",
+      "cardName": "Dinosaur Skull",
+      "groupType": "museum",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_107"
+    },
+    {
+      "id": "108",
+      "cardName": "Mammoth",
+      "groupType": "museum",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_108"
+    },
+    {
+      "id": "109",
+      "cardName": "Crown",
+      "groupType": "museum",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_109"
+    },
+    {
+      "id": "110",
+      "cardName": "Ernie’s Portrait",
+      "groupType": "museum",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_110"
+    },
+    {
+      "id": "111",
+      "cardName": "Cup of Coffee",
+      "groupType": "cafe",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_111"
+    },
+    {
+      "id": "112",
+      "cardName": "Croissants",
+      "groupType": "cafe",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_112"
+    },
+    {
+      "id": "113",
+      "cardName": "Coffee Machine",
+      "groupType": "cafe",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_113"
+    },
+    {
+      "id": "114",
+      "cardName": "Macarons",
+      "groupType": "cafe",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_114"
+    },
+    {
+      "id": "115",
+      "cardName": "Coffee Beans",
+      "groupType": "cafe",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_115"
+    },
+    {
+      "id": "116",
+      "cardName": "Moka Pot",
+      "groupType": "cafe",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_116"
+    },
+    {
+      "id": "117",
+      "cardName": "Cupcake",
+      "groupType": "cafe",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_117"
+    },
+    {
+      "id": "118",
+      "cardName": "Sandwich",
+      "groupType": "cafe",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_118"
+    },
+    {
+      "id": "119",
+      "cardName": "Desserts",
+      "groupType": "cafe",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_119"
+    },
+    {
+      "id": "120",
+      "cardName": "Coffee Break",
+      "groupType": "cafe",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_120"
+    },
+    {
+      "id": "121",
+      "cardName": "Parking Meter",
+      "groupType": "big city",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_121"
+    },
+    {
+      "id": "122",
+      "cardName": "Vending Machine",
+      "groupType": "big city",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_122"
+    },
+    {
+      "id": "123",
+      "cardName": "Kick Scooter",
+      "groupType": "big city",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_123"
+    },
+    {
+      "id": "124",
+      "cardName": "Taxi",
+      "groupType": "big city",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_124"
+    },
+    {
+      "id": "125",
+      "cardName": "Phone Booth",
+      "groupType": "big city",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_125"
+    },
+    {
+      "id": "126",
+      "cardName": "Traffic Light",
+      "groupType": "big city",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_126"
+    },
+    {
+      "id": "127",
+      "cardName": "Pretzel",
+      "groupType": "big city",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_127"
+    },
+    {
+      "id": "128",
+      "cardName": "Bubble Tea",
+      "groupType": "big city",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_128"
+    },
+    {
+      "id": "129",
+      "cardName": "Food Truck",
+      "groupType": "big city",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_129"
+    },
+    {
+      "id": "130",
+      "cardName": "Traffic Jam",
+      "groupType": "big city",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_130"
+    },
+    {
+      "id": "131",
+      "cardName": "Streetlight",
+      "groupType": "park",
+      "stars": 3,
+      "premiumCard": false,
+      "icon": "card_131"
+    },
+    {
+      "id": "132",
+      "cardName": "Fountain",
+      "groupType": "park",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_132"
+    },
+    {
+      "id": "133",
+      "cardName": "Food Cart",
+      "groupType": "park",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_133"
+    },
+    {
+      "id": "134",
+      "cardName": "Flowerbed",
+      "groupType": "park",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_134"
+    },
+    {
+      "id": "135",
+      "cardName": "Bench",
+      "groupType": "park",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_135"
+    },
+    {
+      "id": "136",
+      "cardName": "Rotunda",
+      "groupType": "park",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_136"
+    },
+    {
+      "id": "137",
+      "cardName": "Statue",
+      "groupType": "park",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_137"
+    },
+    {
+      "id": "138",
+      "cardName": "Flock of Pigeons",
+      "groupType": "park",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_138"
+    },
+    {
+      "id": "139",
+      "cardName": "Speech",
+      "groupType": "park",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_139"
+    },
+    {
+      "id": "140",
+      "cardName": "Chess",
+      "groupType": "park",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_140"
+    },
+    {
+      "id": "141",
+      "cardName": "Gavel",
+      "groupType": "town hall",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_141"
+    },
+    {
+      "id": "142",
+      "cardName": "Key",
+      "groupType": "town hall",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_142"
+    },
+    {
+      "id": "143",
+      "cardName": "Inkwell",
+      "groupType": "town hall",
+      "stars": 4,
+      "premiumCard": false,
+      "icon": "card_143"
+    },
+    {
+      "id": "144",
+      "cardName": "Scroll",
+      "groupType": "town hall",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_144"
+    },
+    {
+      "id": "145",
+      "cardName": "Town Banner",
+      "groupType": "town hall",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_145"
+    },
+    {
+      "id": "146",
+      "cardName": "Podium",
+      "groupType": "town hall",
+      "stars": 5,
+      "premiumCard": false,
+      "icon": "card_146"
+    },
+    {
+      "id": "147",
+      "cardName": "Town Hall",
+      "groupType": "town hall",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_147"
+    },
+    {
+      "id": "148",
+      "cardName": "Ribbon Cutting",
+      "groupType": "town hall",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_148"
+    },
+    {
+      "id": "149",
+      "cardName": "Paperwork",
+      "groupType": "town hall",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_149"
+    },
+    {
+      "id": "150",
+      "cardName": "Town Council",
+      "groupType": "town hall",
+      "stars": 5,
+      "premiumCard": true,
+      "icon": "card_150"
+    }
+  ]
+}

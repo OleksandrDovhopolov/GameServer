@@ -7,6 +7,11 @@ namespace GameServer.Api.Services;
 
 public class PackService : IPackService
 {
+    private const string WinterCollectionEventId = "Winter_Collection";
+    private const string SpringCollectionEventId = "Spring_Collection";
+    private const string WinterCollectionCardDatabaseFileName = "Winter_Collection_CardDatabase.json";
+    private const string SpringCollectionCardDatabaseFileName = "Spring_Collection_CardDatabase.json";
+
     private readonly IPackSelectionStrategy _strategy;
     private readonly IWebHostEnvironment _environment;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -26,7 +31,7 @@ public class PackService : IPackService
         var packs = await LoadPacksAsync(ct);
         var pack = packs.FirstOrDefault(p => p.PackId == request.PackId)
             ?? throw new InvalidOperationException($"Pack with id '{request.PackId}' was not found.");
-        var cards = await LoadCardsAsync(ct);
+        var cards = await LoadCardsAsync(request.EventId, ct);
 
         var result = await _strategy.SelectCardsAsync(pack, cards, ct);
 
@@ -50,9 +55,10 @@ public class PackService : IPackService
         return configs.Select(config => new CardPack(config)).ToList();
     }
 
-    private async Task<List<CardDefinition>> LoadCardsAsync(CancellationToken ct)
+    private async Task<List<CardDefinition>> LoadCardsAsync(string eventId, CancellationToken ct)
     {
-        var filePath = Path.Combine(_environment.ContentRootPath, "Data", "CardDatabase.json");
+        var fileName = ResolveCardDatabaseFileName(eventId);
+        var filePath = Path.Combine(_environment.ContentRootPath, "Data", fileName);
         if (!File.Exists(filePath))
         {
             throw new FileNotFoundException("Card database file was not found.", filePath);
@@ -61,6 +67,23 @@ public class PackService : IPackService
         await using var stream = File.OpenRead(filePath);
         var db = await JsonSerializer.DeserializeAsync<CardDatabase>(stream, JsonOptions, ct);
         return db?.Cards ?? new List<CardDefinition>();
+    }
+
+    private static string ResolveCardDatabaseFileName(string eventId)
+    {
+        if (string.IsNullOrWhiteSpace(eventId))
+        {
+            throw new ArgumentException("EventId is required.", nameof(eventId));
+        }
+
+        return eventId switch
+        {
+            WinterCollectionEventId => WinterCollectionCardDatabaseFileName,
+            SpringCollectionEventId => SpringCollectionCardDatabaseFileName,
+            _ => throw new ArgumentException(
+                $"Unsupported EventId '{eventId}'. Supported values: {WinterCollectionEventId}, {SpringCollectionEventId}.",
+                nameof(eventId))
+        };
     }
 
     private sealed class CardDatabase

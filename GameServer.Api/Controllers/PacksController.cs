@@ -20,10 +20,22 @@ public class PackOpenController : ControllerBase
     {
         using (_logger.BeginScope(new Dictionary<string, object> { ["PlayerId"] = request.PlayerId }))
         {
-            _logger.LogInformation("Opening pack {PackId}, {OpenPackRequestId}", request.PackId,  request.OpenPackRequestId);
-            var result = await _packService.OpenPackAsync(request, ct);
-            _logger.LogInformation("Returned cards: {Cards}", string.Join(", ", result.OpenedCardIds));
-            return Ok(result);
+            try
+            {
+                _logger.LogInformation(
+                    "Opening pack {PackId}, {OpenPackRequestId}, {EventId}",
+                    request.PackId,
+                    request.OpenPackRequestId,
+                    request.EventId);
+                var result = await _packService.OpenPackAsync(request, ct);
+                _logger.LogInformation("Returned cards: {Cards}", string.Join(", ", result.OpenedCardIds));
+                return Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Open pack validation failed for event id '{EventId}'", request.EventId);
+                return BadRequest(ex.Message);
+            }
         }
     }
 }
