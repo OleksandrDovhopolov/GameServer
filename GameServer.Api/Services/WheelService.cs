@@ -13,7 +13,7 @@ public sealed class WheelService : IWheelService
     private const string FortuneWheelPropertyName = "FortuneWheel";
     private const string AvailableSpinsPropertyName = "AvailableSpins";
     private const string UpdatedAtPropertyName = "UpdatedAt";
-    private static readonly TimeSpan RegenInterval = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan RegenInterval = TimeSpan.FromMinutes(15);
     private static readonly long RegenIntervalMs = (long)RegenInterval.TotalMilliseconds;
 
     private readonly ISaveRepository _saveRepository;

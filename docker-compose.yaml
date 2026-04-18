@@ -12,6 +12,8 @@
     environment:
       - Redis__ConnectionString=redis:6379,abortConnect=false
       - Postgres__ConnectionString=Host=postgres;Port=5432;Database=game_server;Username=postgres;Password=postgres;Include Error Detail=true
+      - ADMIN_USER=admin
+      - ADMIN_PASS=admin
 
   redis:
     image: redis:alpine
