@@ -1,11 +1,8 @@
 using System.Text;
 using System.Text.Json.Nodes;
 using GameServer.Api.Models.Domain;
-using GameServer.Api.Models.Domain.Rewards;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services.Interfaces;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GameServer.Api.Services;
 
@@ -25,27 +22,7 @@ public sealed class SaveService : ISaveService
     private readonly IGameSaveAssembler _gameSaveAssembler;
     private readonly ISystemClock _clock;
     private readonly ILogger<SaveService> _logger;
-
-    public SaveService(ISaveRepository saveRepository)
-        : this(
-            saveRepository,
-            new LegacyPlayerAggregateRepository(saveRepository),
-            new GameSaveAssembler(),
-            new SystemClock(),
-            NullLogger<SaveService>.Instance)
-    {
-    }
-
-    public SaveService(ISaveRepository saveRepository, ISystemClock clock, ILogger<SaveService> logger)
-        : this(
-            saveRepository,
-            new LegacyPlayerAggregateRepository(saveRepository),
-            new GameSaveAssembler(),
-            clock,
-            logger)
-    {
-    }
-
+    
     public SaveService(
         ISaveRepository saveRepository,
         IPlayerAggregateRepository playerAggregateRepository,
@@ -446,50 +423,5 @@ public sealed class SaveService : ISaveService
         public long? UpdatedAt { get; init; }
         public bool UpdatedAtWasNormalized { get; init; }
         public bool UpdatedAtWasInvalid { get; init; }
-    }
-
-    private sealed class LegacyPlayerAggregateRepository : IPlayerAggregateRepository
-    {
-        private readonly ISaveRepository _saveRepository;
-
-        public LegacyPlayerAggregateRepository(ISaveRepository saveRepository)
-        {
-            _saveRepository = saveRepository;
-        }
-
-        public async Task<PlayerAggregate> LoadAsync(string playerId, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            var save = await _saveRepository.LoadAsync(playerId, ct);
-            JsonObject root = [];
-            long lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            if (save is not null)
-            {
-                lastModified = save.LastModified;
-                if (TryParseRootObject(save.Data, out var parsed))
-                {
-                    root = parsed;
-                }
-            }
-
-            return new PlayerAggregate
-            {
-                PlayerId = playerId,
-                RootDocument = root,
-                LastModified = lastModified
-            };
-        }
-
-        public Task SaveAsync(PlayerAggregate player, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            return _saveRepository.SaveAsync(player.PlayerId, player.RootDocument.ToJsonString(), ct);
-        }
-
-        public Task DeleteAsync(string playerId, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            return _saveRepository.DeleteAsync(playerId, ct);
-        }
     }
 }

@@ -53,8 +53,6 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
     return ConnectionMultiplexer.Connect(redisOptions.ConnectionString);
 });
 builder.Services.AddScoped<RedisSaveRepository>();
-builder.Services.AddScoped<PostgreSqlSaveRepository>();
-builder.Services.AddScoped<ISaveRepository, HybridSaveRepository>();
 builder.Services.AddScoped<IPlayerAggregateRepository, RedisPlayerAggregateRepository>();
 builder.Services.AddScoped<IPlayerResourcesRepository, RedisPlayerResourcesRepository>();
 builder.Services.AddScoped<IGameSaveAssembler, GameSaveAssembler>();
@@ -73,40 +71,6 @@ builder.Services.AddSingleton<IWheelRewardCatalog, WheelRewardCatalog>();
 builder.Services.AddScoped<IWheelService, WheelService>();
 
 var app = builder.Build();
-
-// PostgreSQL schema initialization is temporarily disabled (Redis-only persistence).
-/*
-var stoppingToken = app.Lifetime.ApplicationStopping;
-await using (var scope = app.Services.CreateAsyncScope())
-{
-    var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup.Postgres");
-    var postgresOptions = scope.ServiceProvider.GetRequiredService<IOptions<PostgresOptions>>().Value;
-    if (string.IsNullOrWhiteSpace(postgresOptions.ConnectionString))
-    {
-        throw new InvalidOperationException("Postgres:ConnectionString is not configured.");
-    }
-
-    startupLogger.LogInformation("Starting PostgreSQL schema initialization.");
-    using var conn = new NpgsqlConnection(postgresOptions.ConnectionString);
-    await conn.OpenAsync(stoppingToken);
-    startupLogger.LogInformation("PostgreSQL connection opened for schema initialization.");
-
-    await conn.ExecuteAsync(new CommandDefinition(
-        @"CREATE TABLE IF NOT EXISTS player_saves (
-            player_id VARCHAR(128) PRIMARY KEY,
-            save_data TEXT NOT NULL,
-            last_modified_at BIGINT NOT NULL,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );",
-        cancellationToken: stoppingToken));
-
-    await conn.ExecuteAsync(new CommandDefinition(
-        @"CREATE INDEX IF NOT EXISTS idx_player_saves_last_modified
-          ON player_saves(last_modified_at);",
-        cancellationToken: stoppingToken));
-    startupLogger.LogInformation("PostgreSQL schema initialization completed successfully.");
-}
-*/
 
 // Force reward catalog initialization at startup so invalid configuration fails fast.
 app.Services.GetRequiredService<IWheelRewardCatalog>();

@@ -115,7 +115,7 @@ public sealed class SaveServiceTests
 
     private static SaveService CreateService(InMemorySaveRepository repository, long now)
     {
-        return new SaveService(repository, new FixedClock(now), NullLogger<SaveService>.Instance);
+        return new SaveService(repository, new TestRepository(repository), new GameSaveAssembler(), new FixedClock(now), NullLogger<SaveService>.Instance);
     }
 
     [Fact]

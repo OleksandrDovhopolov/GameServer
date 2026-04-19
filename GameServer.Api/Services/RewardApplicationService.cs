@@ -8,10 +8,10 @@ namespace GameServer.Api.Services;
 public sealed class RewardApplicationService : IRewardApplicationService
 {
     private readonly ISaveRepository _saveRepository;
-    private readonly IPlayerAggregateRepository _playerAggregateRepository;
-    private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
     private readonly IRewardPartApplier _rewardPartApplier;
     private readonly ILogger<RewardApplicationService> _logger;
+    private readonly IPlayerAggregateRepository _playerAggregateRepository;
+    private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
 
     public RewardApplicationService(
         ISaveRepository saveRepository,
@@ -20,11 +20,11 @@ public sealed class RewardApplicationService : IRewardApplicationService
         IRewardPartApplier rewardPartApplier,
         ILogger<RewardApplicationService> logger)
     {
+        _logger = logger;
         _saveRepository = saveRepository;
+        _rewardPartApplier = rewardPartApplier;
         _playerAggregateRepository = playerAggregateRepository;
         _rewardDefinitionRepository = rewardDefinitionRepository;
-        _rewardPartApplier = rewardPartApplier;
-        _logger = logger;
     }
 
     public async Task<GrantRewardResponse> GrantAsync(GrantRewardCommand command, CancellationToken ct = default)

@@ -18,12 +18,12 @@ public sealed class WheelService : IWheelService
     private static readonly TimeSpan RegenInterval = TimeSpan.FromMinutes(2);
     private static readonly long RegenIntervalMs = (long)RegenInterval.TotalMilliseconds;
 
-    private readonly IPlayerAggregateRepository _playerAggregateRepository;
-    private readonly IWheelRewardCatalog _rewardCatalog;
     private readonly ISystemClock _clock;
-    private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
-    private readonly IRewardPartApplier _rewardPartApplier;
     private readonly ILogger<WheelService> _logger;
+    private readonly IWheelRewardCatalog _rewardCatalog;
+    private readonly IRewardPartApplier _rewardPartApplier;
+    private readonly IPlayerAggregateRepository _playerAggregateRepository;
+    private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
 
     public WheelService(
         IPlayerAggregateRepository playerAggregateRepository,
@@ -33,12 +33,12 @@ public sealed class WheelService : IWheelService
         IRewardPartApplier rewardPartApplier,
         ILogger<WheelService> logger)
     {
-        _playerAggregateRepository = playerAggregateRepository;
-        _rewardCatalog = rewardCatalog;
         _clock = clock;
-        _rewardDefinitionRepository = rewardDefinitionRepository;
-        _rewardPartApplier = rewardPartApplier;
         _logger = logger;
+        _rewardCatalog = rewardCatalog;
+        _rewardPartApplier = rewardPartApplier;
+        _playerAggregateRepository = playerAggregateRepository;
+        _rewardDefinitionRepository = rewardDefinitionRepository;
     }
 
     public IReadOnlyList<WheelReward> GetRewards() => _rewardCatalog.GetRewards();
