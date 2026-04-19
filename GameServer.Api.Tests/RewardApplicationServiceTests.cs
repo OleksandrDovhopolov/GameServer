@@ -154,9 +154,73 @@ public sealed class RewardApplicationServiceTests
 
         return new RewardApplicationService(
             saveRepository,
+            new InMemoryPlayerAggregateRepository(saveRepository),
             new InMemoryRewardDefinitionRepository(definitions),
             new RewardPartApplier(handlers),
             NullLogger<RewardApplicationService>.Instance);
+    }
+
+    private sealed class InMemoryPlayerAggregateRepository : IPlayerAggregateRepository
+    {
+        private readonly InMemorySaveRepository _saveRepository;
+        private readonly Dictionary<string, Dictionary<string, int>> _resources = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Dictionary<string, int>> _inventory = new(StringComparer.Ordinal);
+
+        public InMemoryPlayerAggregateRepository(InMemorySaveRepository saveRepository)
+        {
+            _saveRepository = saveRepository;
+        }
+
+        public async Task<PlayerAggregate> LoadAsync(string playerId, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var save = await _saveRepository.LoadAsync(playerId, ct);
+            var root = save is null || string.IsNullOrWhiteSpace(save.Data)
+                ? new JsonObject()
+                : JsonNode.Parse(save.Data) as JsonObject ?? new JsonObject();
+
+            if (!_resources.TryGetValue(playerId, out var resources))
+            {
+                resources = new Dictionary<string, int>(StringComparer.Ordinal)
+                {
+                    ["Gold"] = 0,
+                    ["Energy"] = 0,
+                    ["Gems"] = 0
+                };
+                _resources[playerId] = resources;
+            }
+
+            if (!_inventory.TryGetValue(playerId, out var inventory))
+            {
+                inventory = new Dictionary<string, int>(StringComparer.Ordinal);
+                _inventory[playerId] = inventory;
+            }
+
+            return new PlayerAggregate
+            {
+                PlayerId = playerId,
+                RootDocument = root,
+                LastModified = save?.LastModified ?? 1,
+                Resources = new Dictionary<string, int>(resources, StringComparer.Ordinal),
+                InventoryItems = new Dictionary<string, int>(inventory, StringComparer.Ordinal)
+            };
+        }
+
+        public async Task SaveAsync(PlayerAggregate player, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            _resources[player.PlayerId] = new Dictionary<string, int>(player.Resources, StringComparer.Ordinal);
+            _inventory[player.PlayerId] = new Dictionary<string, int>(player.InventoryItems, StringComparer.Ordinal);
+            await _saveRepository.SaveAsync(player.PlayerId, player.RootDocument.ToJsonString(), ct);
+        }
+
+        public async Task DeleteAsync(string playerId, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            _resources.Remove(playerId);
+            _inventory.Remove(playerId);
+            await _saveRepository.DeleteAsync(playerId, ct);
+        }
     }
 
     private sealed class InMemoryRewardDefinitionRepository : IRewardDefinitionRepository

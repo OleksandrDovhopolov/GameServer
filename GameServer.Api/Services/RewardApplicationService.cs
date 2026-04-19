@@ -8,17 +8,20 @@ namespace GameServer.Api.Services;
 public sealed class RewardApplicationService : IRewardApplicationService
 {
     private readonly ISaveRepository _saveRepository;
+    private readonly IPlayerAggregateRepository _playerAggregateRepository;
     private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
     private readonly IRewardPartApplier _rewardPartApplier;
     private readonly ILogger<RewardApplicationService> _logger;
 
     public RewardApplicationService(
         ISaveRepository saveRepository,
+        IPlayerAggregateRepository playerAggregateRepository,
         IRewardDefinitionRepository rewardDefinitionRepository,
         IRewardPartApplier rewardPartApplier,
         ILogger<RewardApplicationService> logger)
     {
         _saveRepository = saveRepository;
+        _playerAggregateRepository = playerAggregateRepository;
         _rewardDefinitionRepository = rewardDefinitionRepository;
         _rewardPartApplier = rewardPartApplier;
         _logger = logger;
@@ -36,8 +39,7 @@ public sealed class RewardApplicationService : IRewardApplicationService
         using (_logger.BeginScope(new Dictionary<string, object>
                {
                    ["PlayerId"] = command.PlayerId,
-                   ["RewardId"] = command.RewardId,
-                   ["RewardSource"] = command.RewardSource
+                   ["RewardId"] = command.RewardId
                }))
         {
             try
@@ -56,36 +58,15 @@ public sealed class RewardApplicationService : IRewardApplicationService
                     return BuildFailure(command, RewardErrorCodes.RewardNotFound, $"Reward '{command.RewardId}' was not found.");
                 }
 
-                if (!string.Equals(rewardDefinition.Source, command.RewardSource, StringComparison.OrdinalIgnoreCase))
-                {
-                    _logger.LogWarning(
-                        "Reward grant source mismatch. Requested source: {RequestedSource}, Definition source: {DefinitionSource}.",
-                        command.RewardSource,
-                        rewardDefinition.Source);
-                    return BuildFailure(
-                        command,
-                        RewardErrorCodes.InvalidRequest,
-                        $"Reward source mismatch for reward '{command.RewardId}'.");
-                }
-
-                var save = await _saveRepository.LoadAsync(command.PlayerId, ct);
-                if (save is null)
-                {
-                    _logger.LogWarning("Reward grant failed: player save not found.");
-                    return BuildFailure(command, RewardErrorCodes.PlayerNotFound, $"Player '{command.PlayerId}' was not found.");
-                }
-
-                PlayerAggregate player = PlayerAggregateDocument.Deserialize(command.PlayerId, save.Data);
+                var player = await _playerAggregateRepository.LoadAsync(command.PlayerId, ct);
                 await _rewardPartApplier.ApplyAsync(player, rewardDefinition, ct);
-                PlayerAggregateDocument.WriteBack(player);
-
                 var successfulResponse = new GrantRewardResponse
                 {
                     Success = true,
                     RewardId = command.RewardId,
                     PlayerState = PlayerAggregateDocument.ToSnapshot(player)
                 };
-                await _saveRepository.SaveAsync(command.PlayerId, player.RootDocument.ToJsonString(), ct);
+                await _playerAggregateRepository.SaveAsync(player, ct);
 
                 return successfulResponse;
             }
@@ -114,11 +95,6 @@ public sealed class RewardApplicationService : IRewardApplicationService
         if (string.IsNullOrWhiteSpace(command.PlayerId))
         {
             return "PlayerId is required.";
-        }
-
-        if (string.IsNullOrWhiteSpace(command.RewardSource))
-        {
-            return "RewardSource is required.";
         }
 
         if (string.IsNullOrWhiteSpace(command.RewardId))

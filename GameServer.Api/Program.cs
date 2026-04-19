@@ -55,6 +55,8 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 builder.Services.AddScoped<RedisSaveRepository>();
 builder.Services.AddScoped<PostgreSqlSaveRepository>();
 builder.Services.AddScoped<ISaveRepository, HybridSaveRepository>();
+builder.Services.AddScoped<IPlayerAggregateRepository, RedisPlayerAggregateRepository>();
+builder.Services.AddScoped<IGameSaveAssembler, GameSaveAssembler>();
 builder.Services.AddScoped<ISaveService, SaveService>();
 builder.Services.AddSingleton<IRewardDefinitionRepository, RewardDefinitionRepository>();
 builder.Services.AddScoped<IRewardPartApplier, RewardPartApplier>();

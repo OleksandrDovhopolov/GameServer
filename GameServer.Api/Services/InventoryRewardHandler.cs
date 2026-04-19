@@ -24,8 +24,7 @@ public sealed class InventoryRewardHandler : IRewardHandler
             throw new InvalidOperationException("Inventory reward amount must be greater than zero.");
         }
 
-        player.InventoryItems.TryGetValue(rewardPart.TargetId, out var existingAmount);
-        player.InventoryItems[rewardPart.TargetId] = checked(existingAmount + rewardPart.Amount);
+        player.AddInventoryItem(rewardPart.TargetId, rewardPart.Amount);
         return Task.CompletedTask;
     }
 }

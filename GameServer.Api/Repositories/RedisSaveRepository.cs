@@ -74,6 +74,10 @@ public sealed class RedisSaveRepository : ISaveRepository
         var transaction = _database.CreateTransaction();
         _ = transaction.KeyDeleteAsync(GetSaveKey(playerId));
         _ = transaction.KeyDeleteAsync(GetMetaKey(playerId));
+        _ = transaction.KeyDeleteAsync(GetResourcesKey(playerId));
+        _ = transaction.KeyDeleteAsync(GetResourcesVersionKey(playerId));
+        _ = transaction.KeyDeleteAsync(GetInventoryKey(playerId));
+        _ = transaction.KeyDeleteAsync(GetInventoryVersionKey(playerId));
         _ = await transaction.ExecuteAsync().WaitAsync(cancellationToken);
     }
 
@@ -85,6 +89,10 @@ public sealed class RedisSaveRepository : ISaveRepository
 
     private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}";
     private static RedisKey GetMetaKey(string playerId) => $"save:{playerId}:meta";
+    private static RedisKey GetResourcesKey(string playerId) => $"save:{playerId}:resources";
+    private static RedisKey GetResourcesVersionKey(string playerId) => $"save:{playerId}:resources:version";
+    private static RedisKey GetInventoryKey(string playerId) => $"save:{playerId}:inventory";
+    private static RedisKey GetInventoryVersionKey(string playerId) => $"save:{playerId}:inventory:version";
 
     private static long TryParseLastModified(RedisValue rawValue)
     {

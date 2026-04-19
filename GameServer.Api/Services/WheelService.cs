@@ -1,10 +1,10 @@
 using System.Text.Json.Nodes;
 using GameServer.Api.Models.Domain;
+using GameServer.Api.Models.Domain.Rewards;
 using GameServer.Api.Models.Dto.Rewards;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GameServer.Api.Services;
 
@@ -18,33 +18,22 @@ public sealed class WheelService : IWheelService
     private static readonly TimeSpan RegenInterval = TimeSpan.FromMinutes(2);
     private static readonly long RegenIntervalMs = (long)RegenInterval.TotalMilliseconds;
 
-    private readonly ISaveRepository _saveRepository;
+    private readonly IPlayerAggregateRepository _playerAggregateRepository;
     private readonly IWheelRewardCatalog _rewardCatalog;
     private readonly ISystemClock _clock;
     private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
     private readonly IRewardPartApplier _rewardPartApplier;
     private readonly ILogger<WheelService> _logger;
 
-    public WheelService(ISaveRepository saveRepository, IWheelRewardCatalog rewardCatalog, ISystemClock clock)
-        : this(
-            saveRepository,
-            rewardCatalog,
-            clock,
-            new EmptyRewardDefinitionRepository(),
-            new NoOpRewardPartApplier(),
-            NullLogger<WheelService>.Instance)
-    {
-    }
-
     public WheelService(
-        ISaveRepository saveRepository,
+        IPlayerAggregateRepository playerAggregateRepository,
         IWheelRewardCatalog rewardCatalog,
         ISystemClock clock,
         IRewardDefinitionRepository rewardDefinitionRepository,
         IRewardPartApplier rewardPartApplier,
         ILogger<WheelService> logger)
     {
-        _saveRepository = saveRepository;
+        _playerAggregateRepository = playerAggregateRepository;
         _rewardCatalog = rewardCatalog;
         _clock = clock;
         _rewardDefinitionRepository = rewardDefinitionRepository;
@@ -61,7 +50,8 @@ public sealed class WheelService : IWheelService
         var now = _clock.UtcNowUnixMilliseconds;
         _logger.LogInformation("Wheel GetState started. Now: {Now}, RegenIntervalMs: {RegenIntervalMs}", now, RegenIntervalMs);
 
-        var root = await LoadSaveDocumentAsync(playerId, cancellationToken);
+        var player = await _playerAggregateRepository.LoadAsync(playerId, cancellationToken);
+        var root = player.RootDocument;
         var hasExistingState = TryReadExistingState(root, now, out var state, out var diagnostics);
         var hasNonCanonicalWheelFields = HasNonCanonicalWheelFields(root);
         var stateChanged = hasNonCanonicalWheelFields ||
@@ -85,7 +75,7 @@ public sealed class WheelService : IWheelService
         if (stateChanged)
         {
             SetState(root, state);
-            await SaveDocumentAsync(playerId, root, cancellationToken);
+            await _playerAggregateRepository.SaveAsync(player, cancellationToken);
         }
 
         return new WheelStateResult
@@ -101,14 +91,15 @@ public sealed class WheelService : IWheelService
         ValidatePlayerId(playerId);
 
         var now = _clock.UtcNowUnixMilliseconds;
-        var root = await LoadSaveDocumentAsync(playerId, cancellationToken);
+        var player = await _playerAggregateRepository.LoadAsync(playerId, cancellationToken);
+        var root = player.RootDocument;
         var state = ReadState(root, now, out _, out _);
         _ = ApplyRegenIfNeeded(state, now);
 
         if (state.AvailableSpins <= 0)
         {
             SetState(root, state);
-            await SaveDocumentAsync(playerId, root, cancellationToken);
+            await _playerAggregateRepository.SaveAsync(player, cancellationToken);
             throw new NoSpinsAvailableException(state.UpdatedAt, state.NextUpdateAt);
         }
 
@@ -128,10 +119,7 @@ public sealed class WheelService : IWheelService
                 $"Wheel reward definition '{rewardId}' source must be '{WheelRewardSource}', but was '{rewardDefinition.Source}'.");
         }
 
-        var player = PlayerAggregateDocument.Deserialize(playerId, root.ToJsonString());
         await _rewardPartApplier.ApplyAsync(player, rewardDefinition, cancellationToken);
-        PlayerAggregateDocument.WriteBack(player);
-        root = player.RootDocument;
 
         var rewardGrantResponse = new GrantRewardResponse
         {
@@ -141,7 +129,7 @@ public sealed class WheelService : IWheelService
         };
 
         SetState(root, state);
-        await SaveDocumentAsync(playerId, root, cancellationToken);
+        await _playerAggregateRepository.SaveAsync(player, cancellationToken);
 
         return new WheelSpinResult
         {
@@ -151,30 +139,6 @@ public sealed class WheelService : IWheelService
             NextUpdateAt = state.NextUpdateAt,
             RewardGrant = rewardGrantResponse
         };
-    }
-
-    private async Task<JsonObject> LoadSaveDocumentAsync(string playerId, CancellationToken cancellationToken)
-    {
-        var save = await _saveRepository.LoadAsync(playerId, cancellationToken);
-        if (save is null || string.IsNullOrWhiteSpace(save.Data))
-        {
-            return [];
-        }
-
-        try
-        {
-            var parsed = JsonNode.Parse(save.Data);
-            return parsed as JsonObject ?? [];
-        }
-        catch
-        {
-            return [];
-        }
-    }
-
-    private async Task SaveDocumentAsync(string playerId, JsonObject document, CancellationToken cancellationToken)
-    {
-        await _saveRepository.SaveAsync(playerId, document.ToJsonString(), cancellationToken);
     }
 
     private static FortuneWheelModuleSaveData ReadState(
@@ -407,28 +371,5 @@ public sealed class WheelService : IWheelService
     {
         public bool TimestampWasNormalized { get; init; }
         public bool TimestampWasRepaired { get; init; }
-    }
-
-    private sealed class NoOpRewardPartApplier : IRewardPartApplier
-    {
-        public Task ApplyAsync(Models.Domain.Rewards.PlayerAggregate player, Models.Domain.Rewards.RewardDefinition rewardDefinition, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            return Task.CompletedTask;
-        }
-    }
-
-    private sealed class EmptyRewardDefinitionRepository : IRewardDefinitionRepository
-    {
-        public Task<Models.Domain.Rewards.RewardDefinition?> GetByIdAsync(string rewardId, CancellationToken ct)
-        {
-            ct.ThrowIfCancellationRequested();
-            return Task.FromResult<Models.Domain.Rewards.RewardDefinition?>(new Models.Domain.Rewards.RewardDefinition
-            {
-                RewardId = rewardId,
-                Source = WheelRewardSource,
-                Parts = []
-            });
-        }
     }
 }

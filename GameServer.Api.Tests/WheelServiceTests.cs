@@ -1,8 +1,10 @@
 using System.Text.Json.Nodes;
 using GameServer.Api.Models.Domain;
+using GameServer.Api.Models.Domain.Rewards;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace GameServer.Api.Tests;
@@ -307,9 +309,12 @@ public sealed class WheelServiceTests
     private static WheelService CreateService(InMemorySaveRepository repository, long now)
     {
         return new WheelService(
-            repository,
+            new InMemoryPlayerAggregateRepository(repository),
             new FixedWheelRewardCatalog("gold_500"),
-            new FixedClock(now));
+            new FixedClock(now),
+            new StubRewardDefinitionRepository("wheel"),
+            new NoOpRewardPartApplier(),
+            NullLogger<WheelService>.Instance);
     }
 
     private sealed class FixedWheelRewardCatalog : IWheelRewardCatalog
@@ -389,6 +394,83 @@ public sealed class WheelServiceTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(_store.ContainsKey(playerId));
+        }
+    }
+
+    private sealed class InMemoryPlayerAggregateRepository : IPlayerAggregateRepository
+    {
+        private readonly InMemorySaveRepository _saveRepository;
+
+        public InMemoryPlayerAggregateRepository(InMemorySaveRepository saveRepository)
+        {
+            _saveRepository = saveRepository;
+        }
+
+        public async Task<PlayerAggregate> LoadAsync(string playerId, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            var save = await _saveRepository.LoadAsync(playerId, ct);
+            JsonObject root = [];
+            if (save is not null && !string.IsNullOrWhiteSpace(save.Data))
+            {
+                try
+                {
+                    root = JsonNode.Parse(save.Data) as JsonObject ?? [];
+                }
+                catch
+                {
+                    root = [];
+                }
+            }
+
+            return new PlayerAggregate
+            {
+                PlayerId = playerId,
+                RootDocument = root,
+                LastModified = save?.LastModified ?? 1
+            };
+        }
+
+        public Task SaveAsync(PlayerAggregate player, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return _saveRepository.SaveAsync(player.PlayerId, player.RootDocument.ToJsonString(), ct);
+        }
+
+        public Task DeleteAsync(string playerId, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return _saveRepository.DeleteAsync(playerId, ct);
+        }
+    }
+
+    private sealed class StubRewardDefinitionRepository : IRewardDefinitionRepository
+    {
+        private readonly string _source;
+
+        public StubRewardDefinitionRepository(string source)
+        {
+            _source = source;
+        }
+
+        public Task<RewardDefinition?> GetByIdAsync(string rewardId, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.FromResult<RewardDefinition?>(new RewardDefinition
+            {
+                RewardId = rewardId,
+                Source = _source,
+                Parts = []
+            });
+        }
+    }
+
+    private sealed class NoOpRewardPartApplier : IRewardPartApplier
+    {
+        public Task ApplyAsync(PlayerAggregate player, RewardDefinition rewardDefinition, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
         }
     }
 }

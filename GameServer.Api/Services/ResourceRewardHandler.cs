@@ -24,8 +24,7 @@ public sealed class ResourceRewardHandler : IRewardHandler
             throw new InvalidOperationException("Resource reward amount must be greater than zero.");
         }
 
-        player.Resources.TryGetValue(rewardPart.TargetId, out var existingAmount);
-        player.Resources[rewardPart.TargetId] = checked(existingAmount + rewardPart.Amount);
+        player.AddResource(rewardPart.TargetId, rewardPart.Amount);
         return Task.CompletedTask;
     }
 }
