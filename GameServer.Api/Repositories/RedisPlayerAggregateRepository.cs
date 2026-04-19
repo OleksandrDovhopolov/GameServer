@@ -132,19 +132,7 @@ public sealed class RedisPlayerAggregateRepository : IPlayerAggregateRepository
         root.Remove(ResourcesPropertyName);
         root.Remove(ServerRewardsPropertyName);
         root.Remove(InventoryItemsPropertyName);
-
-        if (root.TryGetPropertyValue(InventoryPropertyName, out var inventoryNode) && inventoryNode is JsonObject inventoryObject)
-        {
-            inventoryObject.Remove(InventoryItemsPropertyName);
-            if (!inventoryObject.Any())
-            {
-                root.Remove(InventoryPropertyName);
-            }
-        }
-        else
-        {
-            root.Remove(InventoryPropertyName);
-        }
+        root.Remove(InventoryPropertyName);
     }
 
     private async Task<long> GetNextVersionAsync(RedisKey versionKey, CancellationToken ct)

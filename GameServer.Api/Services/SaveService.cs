@@ -336,19 +336,7 @@ public sealed class SaveService : ISaveService
         root.Remove(ResourcesPropertyName);
         root.Remove(ServerRewardsPropertyName);
         root.Remove(InventoryItemsPropertyName);
-
-        if (root.TryGetPropertyValue(InventoryPropertyName, out var inventoryNode) && inventoryNode is JsonObject inventoryObject)
-        {
-            inventoryObject.Remove(InventoryItemsPropertyName);
-            if (!inventoryObject.Any())
-            {
-                root.Remove(InventoryPropertyName);
-            }
-        }
-        else
-        {
-            root.Remove(InventoryPropertyName);
-        }
+        root.Remove(InventoryPropertyName);
     }
 
     private static void ReplaceRootDocument(JsonObject destination, JsonObject source)

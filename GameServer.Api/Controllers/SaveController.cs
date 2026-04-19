@@ -1,6 +1,8 @@
 using GameServer.Api.Models.Dto.Save;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace GameServer.Api.Controllers;
 
@@ -55,11 +57,23 @@ public sealed class SaveController : ControllerBase
             {
                 _logger.LogInformation("Load request received.");
                 var result = await _saveService.LoadAsync(playerId, cancellationToken);
+                var dataNode = JsonNode.Parse(result.Data);
+                if (dataNode is null)
+                {
+                    _logger.LogError("Load request returned empty JSON payload.");
+                    return StatusCode(StatusCodes.Status500InternalServerError, "Stored save data is not valid JSON.");
+                }
+
                 return Ok(new SaveLoadResponse
                 {
-                    Data = result.Data,
+                    Data = dataNode,
                     LastModified = result.LastModified
                 });
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex, "Load request returned invalid JSON payload.");
+                return StatusCode(StatusCodes.Status500InternalServerError, "Stored save data is not valid JSON.");
             }
             catch (ArgumentException ex)
             {

@@ -155,6 +155,32 @@ public sealed class SaveServiceTests
     }
 
     [Fact]
+    public async Task Save_WhenClientSendsLegacyInventoryFields_RemovesInventoryFromBlobRoot()
+    {
+        const long now = 1_700_000_000_000;
+        var saveRepository = new InMemorySaveRepository();
+        saveRepository.Seed("p1", "{\"coins\":100}");
+        var aggregateRepository = new InMemoryPlayerAggregateRepository();
+        aggregateRepository.Seed("p1", "{\"coins\":100}", resources: new Dictionary<string, int>(StringComparer.Ordinal), inventory: new Dictionary<string, int>(StringComparer.Ordinal));
+
+        var service = new SaveService(
+            saveRepository,
+            aggregateRepository,
+            new GameSaveAssembler(),
+            new FixedClock(now),
+            NullLogger<SaveService>.Instance);
+
+        await service.SaveAsync(
+            "p1",
+            "{\"coins\":250,\"Inventory\":{\"Owners\":[]}}",
+            CancellationToken.None);
+
+        var aggregate = await aggregateRepository.LoadAsync("p1", CancellationToken.None);
+        Assert.Equal(250, aggregate.RootDocument["coins"]!.GetValue<int>());
+        Assert.Null(aggregate.RootDocument["Inventory"]);
+    }
+
+    [Fact]
     public async Task Load_BuildsClientSaveJsonFromStructuredEconomy()
     {
         const long now = 1_700_000_000_000;

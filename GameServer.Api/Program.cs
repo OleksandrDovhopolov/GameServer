@@ -52,7 +52,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 
     return ConnectionMultiplexer.Connect(redisOptions.ConnectionString);
 });
-builder.Services.AddScoped<RedisSaveRepository>();
+builder.Services.AddScoped<ISaveRepository, RedisSaveRepository>();
 builder.Services.AddScoped<IPlayerAggregateRepository, RedisPlayerAggregateRepository>();
 builder.Services.AddScoped<IPlayerResourcesRepository, RedisPlayerResourcesRepository>();
 builder.Services.AddScoped<IPlayerInventoryRepository, RedisPlayerInventoryRepository>();
