@@ -55,9 +55,11 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 builder.Services.AddScoped<RedisSaveRepository>();
 builder.Services.AddScoped<IPlayerAggregateRepository, RedisPlayerAggregateRepository>();
 builder.Services.AddScoped<IPlayerResourcesRepository, RedisPlayerResourcesRepository>();
+builder.Services.AddScoped<IPlayerInventoryRepository, RedisPlayerInventoryRepository>();
 builder.Services.AddScoped<IGameSaveAssembler, GameSaveAssembler>();
 builder.Services.AddScoped<ISaveService, SaveService>();
 builder.Services.AddScoped<IResourceAdjustmentService, ResourceAdjustmentService>();
+builder.Services.AddScoped<IInventoryManagementService, InventoryManagementService>();
 builder.Services.AddSingleton<IRewardDefinitionRepository, RewardDefinitionRepository>();
 builder.Services.AddScoped<IRewardPartApplier, RewardPartApplier>();
 builder.Services.AddScoped<IRewardHandler, ResourceRewardHandler>();

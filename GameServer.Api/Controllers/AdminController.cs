@@ -1,9 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using GameServer.Api.Models.Dto.Inventory;
 using GameServer.Api.Filters;
 using GameServer.Api.Models.Dto.Admin;
+using GameServer.Api.Models.Domain.Inventory;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services.Interfaces;
+using GameServer.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GameServer.Api.Controllers;
@@ -22,16 +25,38 @@ public sealed class AdminController : ControllerBase
 
     private readonly ILogger<AdminController> _logger;
     private readonly ISaveRepository _saveRepository;
+    private readonly IInventoryManagementService _inventoryManagementService;
     private readonly ISystemClock _clock;
 
     public AdminController(
         ILogger<AdminController> logger,
         ISaveRepository saveRepository,
+        IInventoryManagementService inventoryManagementService,
         ISystemClock clock)
     {
         _logger = logger;
         _saveRepository = saveRepository;
+        _inventoryManagementService = inventoryManagementService;
         _clock = clock;
+    }
+
+    [HttpPost("/api/admin/inventory/add")]
+    public async Task<ActionResult<InventoryOperationResponse>> AddInventory(
+        [FromBody] AddInventoryItemCommand command,
+        CancellationToken cancellationToken)
+    {
+        using (_logger.BeginScope(new Dictionary<string, object?>
+               {
+                   ["PlayerId"] = command.PlayerId,
+                   ["ItemId"] = command.ItemId,
+                   ["Amount"] = command.Amount,
+                   ["Category"] = command.Category,
+                   ["Reason"] = command.Reason
+               }))
+        {
+            var result = await _inventoryManagementService.AddAsync(command, cancellationToken);
+            return MapInventoryResult(result);
+        }
     }
 
     [HttpPost("{id}/spins")]
@@ -271,5 +296,30 @@ public sealed class AdminController : ControllerBase
         }
 
         return null;
+    }
+
+    private ActionResult<InventoryOperationResponse> MapInventoryResult(InventoryOperationResult result)
+    {
+        var response = new InventoryOperationResponse
+        {
+            Success = result.Success,
+            ErrorCode = result.ErrorCode,
+            ErrorMessage = result.ErrorMessage,
+            Inventory = result.Snapshot,
+            PlayerState = result.PlayerState
+        };
+
+        if (result.Success)
+        {
+            return Ok(response);
+        }
+
+        return response.ErrorCode switch
+        {
+            InventoryErrorCodes.InvalidRequest => BadRequest(response),
+            InventoryErrorCodes.PlayerNotFound => NotFound(response),
+            InventoryErrorCodes.InsufficientInventory => StatusCode(StatusCodes.Status409Conflict, response),
+            _ => StatusCode(StatusCodes.Status500InternalServerError, response)
+        };
     }
 }
