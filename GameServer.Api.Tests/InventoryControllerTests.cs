@@ -1,6 +1,7 @@
 using GameServer.Api.Controllers;
 using GameServer.Api.Models.Domain.Inventory;
 using GameServer.Api.Models.Dto.Inventory;
+using GameServer.Api.Models.Dto.Rewards;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Http;
@@ -18,12 +19,9 @@ public sealed class InventoryControllerTests
         var controller = CreateController(new StubService(new InventoryOperationResult
         {
             Success = true,
-            Snapshot = new InventorySnapshotDto
+            PlayerState = new PlayerStateSnapshotDto
             {
-                Items = new Dictionary<string, int>(StringComparer.Ordinal)
-                {
-                    ["bomb"] = 2
-                }
+                InventoryItems = [new InventoryItemDto { ItemId = "bomb", Amount = 2 }]
             }
         }));
 
@@ -77,12 +75,9 @@ public sealed class InventoryControllerTests
         var controller = CreateController(new StubService(new InventoryOperationResult
         {
             Success = true,
-            Snapshot = new InventorySnapshotDto
+            PlayerState = new PlayerStateSnapshotDto
             {
-                Items = new Dictionary<string, int>(StringComparer.Ordinal)
-                {
-                    ["bomb"] = 1
-                }
+                InventoryItems = [new InventoryItemDto { ItemId = "bomb", Amount = 1 }]
             }
         }));
 

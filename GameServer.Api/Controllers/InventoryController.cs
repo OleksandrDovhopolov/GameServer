@@ -59,7 +59,6 @@ public sealed class InventoryController : ControllerBase
             Success = result.Success,
             ErrorCode = result.ErrorCode,
             ErrorMessage = result.ErrorMessage,
-            Inventory = result.Snapshot,
             PlayerState = result.PlayerState
         };
 

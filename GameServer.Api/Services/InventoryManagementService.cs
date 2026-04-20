@@ -39,7 +39,7 @@ public sealed class InventoryManagementService : IInventoryManagementService
                 record.Items.TryGetValue(command.ItemId, out var currentValue);
                 record.Items[command.ItemId] = checked(currentValue + command.Amount);
                 await SaveRecordAsync(record, token);
-                return await BuildSuccessAsync(command.PlayerId, record, token);
+                return await BuildSuccessAsync(command.PlayerId, token);
             },
             ct);
     }
@@ -78,7 +78,7 @@ public sealed class InventoryManagementService : IInventoryManagementService
                 }
 
                 await SaveRecordAsync(record, token);
-                return await BuildSuccessAsync(command.PlayerId, record, token);
+                return await BuildSuccessAsync(command.PlayerId, token);
             },
             ct);
     }
@@ -126,7 +126,7 @@ public sealed class InventoryManagementService : IInventoryManagementService
                 }
 
                 await SaveRecordAsync(record, token);
-                return await BuildSuccessAsync(command.PlayerId, record, token);
+                return await BuildSuccessAsync(command.PlayerId, token);
             },
             ct);
     }
@@ -322,16 +322,12 @@ public sealed class InventoryManagementService : IInventoryManagementService
         await _playerInventoryRepository.SaveAsync(record, ct);
     }
 
-    private async Task<InventoryOperationResult> BuildSuccessAsync(
-        string playerId,
-        PlayerInventoryRecord record,
-        CancellationToken ct)
+    private async Task<InventoryOperationResult> BuildSuccessAsync(string playerId, CancellationToken ct)
     {
         var aggregate = await _playerAggregateRepository.LoadAsync(playerId, ct);
         return new InventoryOperationResult
         {
             Success = true,
-            Snapshot = ToSnapshot(record),
             PlayerState = PlayerAggregateDocument.ToSnapshot(aggregate)
         };
     }
@@ -343,16 +339,6 @@ public sealed class InventoryManagementService : IInventoryManagementService
             PlayerId = playerId,
             Version = 0,
             Items = new Dictionary<string, int>(StringComparer.Ordinal)
-        };
-    }
-
-    private static InventorySnapshotDto ToSnapshot(PlayerInventoryRecord record)
-    {
-        return new InventorySnapshotDto
-        {
-            Items = record.Items
-                .OrderBy(x => x.Key, StringComparer.Ordinal)
-                .ToDictionary(x => x.Key, x => x.Value, StringComparer.Ordinal)
         };
     }
 

@@ -1,4 +1,5 @@
 using GameServer.Api.Models.Domain;
+using GameServer.Api.Models.Domain.Inventory;
 using GameServer.Api.Models.Dto.Inventory;
 using GameServer.Api.Models.Domain.Rewards;
 using GameServer.Api.Repositories.Interfaces;
@@ -29,7 +30,7 @@ public sealed class InventoryManagementServiceTests
         });
 
         Assert.True(result.Success);
-        Assert.Equal(3, result.Snapshot!.Items["bomb"]);
+        Assert.Equal(3, GetInventoryAmount(result, "bomb"));
     }
 
     [Fact]
@@ -54,7 +55,7 @@ public sealed class InventoryManagementServiceTests
         });
 
         Assert.True(result.Success);
-        Assert.Equal(6, result.Snapshot!.Items["bomb"]);
+        Assert.Equal(6, GetInventoryAmount(result, "bomb"));
     }
 
     [Fact]
@@ -79,7 +80,7 @@ public sealed class InventoryManagementServiceTests
         });
 
         Assert.True(result.Success);
-        Assert.Equal(3, result.Snapshot!.Items["bomb"]);
+        Assert.Equal(3, GetInventoryAmount(result, "bomb"));
     }
 
     [Fact]
@@ -104,7 +105,7 @@ public sealed class InventoryManagementServiceTests
         });
 
         Assert.True(result.Success);
-        Assert.Empty(result.Snapshot!.Items);
+        Assert.Empty(result.PlayerState!.InventoryItems);
     }
 
     [Fact]
@@ -164,8 +165,8 @@ public sealed class InventoryManagementServiceTests
         });
 
         Assert.True(result.Success);
-        Assert.Equal(2, result.Snapshot!.Items["bomb"]);
-        Assert.Equal(1, result.Snapshot!.Items["rocket"]);
+        Assert.Equal(2, GetInventoryAmount(result, "bomb"));
+        Assert.Equal(1, GetInventoryAmount(result, "rocket"));
     }
 
     [Fact]
@@ -232,6 +233,12 @@ public sealed class InventoryManagementServiceTests
             inventoryRepository,
             aggregateRepository,
             NullLogger<InventoryManagementService>.Instance);
+    }
+
+    private static int GetInventoryAmount(InventoryOperationResult result, string itemId)
+    {
+        var item = Assert.Single(result.PlayerState!.InventoryItems.Where(x => x.ItemId == itemId));
+        return item.Amount;
     }
 
     private sealed class InMemorySaveRepository : ISaveRepository

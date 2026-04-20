@@ -7,6 +7,5 @@ public sealed class InventoryOperationResponse
     public bool Success { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
-    public InventorySnapshotDto? Inventory { get; init; }
     public PlayerStateSnapshotDto? PlayerState { get; init; }
 }

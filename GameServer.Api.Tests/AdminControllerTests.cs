@@ -4,6 +4,7 @@ using GameServer.Api.Models.Domain.Inventory;
 using GameServer.Api.Models.Domain;
 using GameServer.Api.Models.Dto.Admin;
 using GameServer.Api.Models.Dto.Inventory;
+using GameServer.Api.Models.Dto.Rewards;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
@@ -107,12 +108,9 @@ public sealed class AdminControllerTests
             AddResult = new InventoryOperationResult
             {
                 Success = true,
-                Snapshot = new InventorySnapshotDto
+                PlayerState = new PlayerStateSnapshotDto
                 {
-                    Items = new Dictionary<string, int>(StringComparer.Ordinal)
-                    {
-                        ["bomb"] = 3
-                    }
+                    InventoryItems = [new InventoryItemDto { ItemId = "bomb", Amount = 3 }]
                 }
             }
         };
