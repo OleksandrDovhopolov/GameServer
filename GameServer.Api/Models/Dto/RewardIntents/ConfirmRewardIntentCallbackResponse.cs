@@ -6,7 +6,6 @@ public sealed class ConfirmRewardIntentCallbackResponse
 {
     public bool Success { get; init; }
     public string Status { get; init; } = RewardIntentStatuses.Failed;
-    public int? NewCrystalsBalance { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
 }

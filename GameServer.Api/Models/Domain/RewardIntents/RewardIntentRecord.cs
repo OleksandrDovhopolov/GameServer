@@ -12,7 +12,6 @@ public sealed class RewardIntentRecord
     public long UpdatedAtUtc { get; init; }
     public long ExpiresAtUtc { get; init; }
     public long? FulfilledAtUtc { get; init; }
-    public int? NewCrystalsBalance { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
     public string? AdNetwork { get; init; }

@@ -72,8 +72,7 @@ public sealed class RewardIntentControllerTests
         {
             StatusResponse = new GetRewardIntentStatusResponse
             {
-                Status = RewardIntentStatuses.Fulfilled,
-                NewCrystalsBalance = 2050
+                Status = RewardIntentStatuses.Fulfilled
             }
         });
 
@@ -82,7 +81,6 @@ public sealed class RewardIntentControllerTests
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         var payload = Assert.IsType<GetRewardIntentStatusResponse>(ok.Value);
         Assert.Equal("fulfilled", payload.Status);
-        Assert.Equal(2050, payload.NewCrystalsBalance);
     }
 
     [Fact]

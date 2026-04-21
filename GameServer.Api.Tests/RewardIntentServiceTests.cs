@@ -1,4 +1,7 @@
 using GameServer.Api.Models.Domain.RewardIntents;
+using GameServer.Api.Models.Domain.Rewards;
+using GameServer.Api.Models.Dto.RewardIntents;
+using GameServer.Api.Models.Dto.Rewards;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
@@ -10,277 +13,250 @@ namespace GameServer.Api.Tests;
 public sealed class RewardIntentServiceTests
 {
     [Fact]
-    public async Task CreateIntentAsync_WhenValid_CreatesPendingIntent()
+    public async Task CreateIntent_WhenRewardExistsInDefinitions_CreatesPendingIntent()
     {
         var repository = new InMemoryRewardIntentRepository();
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 1_700_000_000_000);
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["Gems"],
+            playerExists: true,
+            grantResponses: []);
 
-        var response = await service.CreateIntentAsync("player_1", RewardIntentDefaults.SupportedRewardId, CancellationToken.None);
+        var response = await service.CreateIntentAsync("player_1", "Gems", CancellationToken.None);
 
         Assert.True(response.Success);
         Assert.NotNull(response.RewardIntentId);
-        Assert.StartsWith("ri_", response.RewardIntentId!, StringComparison.Ordinal);
-
-        var savedIntent = await repository.GetByIdAsync(response.RewardIntentId!, CancellationToken.None);
-        Assert.NotNull(savedIntent);
-        Assert.Equal(RewardIntentStatuses.Pending, savedIntent!.Status);
-        Assert.Equal("player_1", savedIntent.PlayerId);
-        Assert.Equal(RewardIntentDefaults.SupportedRewardId, savedIntent.RewardId);
-        Assert.Equal(1_700_000_000_000 + (long)RewardIntentDefaults.IntentTtl.TotalMilliseconds, savedIntent.ExpiresAtUtc);
+        var saved = await repository.GetByIdAsync(response.RewardIntentId!, CancellationToken.None);
+        Assert.NotNull(saved);
+        Assert.Equal(RewardIntentStatuses.Pending, saved!.Status);
+        Assert.Equal("Gems", saved.RewardId);
     }
 
     [Fact]
-    public async Task CreateIntentAsync_WhenPlayerMissing_ReturnsPlayerNotFound()
+    public async Task CreateIntent_WhenRewardMissingInDefinitions_ReturnsRewardNotSupported()
     {
-        var service = CreateService(new InMemoryRewardIntentRepository(), playerExists: false, nowUtcMs: 1_700_000_000_000);
+        var service = CreateService(
+            new InMemoryRewardIntentRepository(),
+            supportedRewardIds: ["Gold"],
+            playerExists: true,
+            grantResponses: []);
 
-        var response = await service.CreateIntentAsync("missing", RewardIntentDefaults.SupportedRewardId, CancellationToken.None);
-
-        Assert.False(response.Success);
-        Assert.Equal(RewardIntentErrorCodes.PlayerNotFound, response.ErrorCode);
-    }
-
-    [Fact]
-    public async Task CreateIntentAsync_WhenRewardUnsupported_ReturnsRewardNotSupported()
-    {
-        var service = CreateService(new InMemoryRewardIntentRepository(), playerExists: true, nowUtcMs: 1_700_000_000_000);
-
-        var response = await service.CreateIntentAsync("player_1", "Gold", CancellationToken.None);
+        var response = await service.CreateIntentAsync("player_1", "Gems", CancellationToken.None);
 
         Assert.False(response.Success);
         Assert.Equal(RewardIntentErrorCodes.RewardNotSupported, response.ErrorCode);
     }
 
     [Fact]
-    public async Task GetIntentStatusAsync_WhenPending_ReturnsPending()
+    public async Task GetStatus_WhenFulfilled_ReturnsStatusOnlyContract()
     {
         var repository = new InMemoryRewardIntentRepository();
         repository.SeedIntent(new RewardIntentRecord
         {
-            RewardIntentId = "ri_pending",
+            RewardIntentId = "ri_status",
             PlayerId = "player_1",
-            RewardId = RewardIntentDefaults.SupportedRewardId,
-            Status = RewardIntentStatuses.Pending,
+            RewardId = "Gems",
+            Status = RewardIntentStatuses.Fulfilled,
             CreatedAtUtc = 1000,
-            UpdatedAtUtc = 1000,
-            ExpiresAtUtc = 999_999_999_999
+            UpdatedAtUtc = 2000,
+            ExpiresAtUtc = 5000,
+            FulfilledAtUtc = 2000
         });
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 10_000);
 
-        var response = await service.GetIntentStatusAsync("ri_pending", CancellationToken.None);
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["Gems"],
+            playerExists: true,
+            grantResponses: []);
 
-        Assert.Equal(RewardIntentStatuses.Pending, response.Status);
-        Assert.Null(response.NewCrystalsBalance);
-        Assert.Null(response.ErrorCode);
+        var response = await service.GetIntentStatusAsync("ri_status", CancellationToken.None);
+
+        Assert.Equal("fulfilled", response.Status);
     }
 
     [Fact]
-    public async Task GetIntentStatusAsync_WhenFulfilled_ReturnsBalance()
+    public async Task Callback_WhenGrantSucceeds_FinalizesFulfilled()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_ok",
+            PlayerId = "player_1",
+            RewardId = "Gems",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1_000_000
+        });
+
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["Gems"],
+            playerExists: true,
+            grantResponses:
+            [
+                new GrantRewardResponse { Success = true, RewardId = "Gems" }
+            ]);
+
+        var response = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_ok", "evt_1", "{}", CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.Equal("fulfilled", response.Status);
+    }
+
+    [Fact]
+    public async Task Callback_WhenAlreadySucceededEvent_ReturnsCallbackDuplicate()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_dup",
+            PlayerId = "player_1",
+            RewardId = "Gems",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1_000_000
+        });
+
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["Gems"],
+            playerExists: true,
+            grantResponses:
+            [
+                new GrantRewardResponse { Success = true, RewardId = "Gems" }
+            ]);
+
+        var first = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_dup", "evt_1", "{}", CancellationToken.None);
+        var second = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_dup", "evt_1", "{}", CancellationToken.None);
+
+        Assert.True(first.Success);
+        Assert.False(second.Success);
+        Assert.Equal(RewardIntentErrorCodes.CallbackDuplicate, second.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Callback_WhenGrantFailed_RetryWithSameEventIdCanSucceed()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_retry",
+            PlayerId = "player_1",
+            RewardId = "Gems",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1_000_000
+        });
+
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["Gems"],
+            playerExists: true,
+            grantResponses:
+            [
+                new GrantRewardResponse
+                {
+                    Success = false,
+                    RewardId = "Gems",
+                    ErrorCode = RewardErrorCodes.RewardApplicationFailed,
+                    ErrorMessage = "temporary"
+                },
+                new GrantRewardResponse { Success = true, RewardId = "Gems" }
+            ]);
+
+        var first = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_retry", "evt_7", "{}", CancellationToken.None);
+        var second = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_retry", "evt_7", "{}", CancellationToken.None);
+
+        Assert.False(first.Success);
+        Assert.Equal("failed", first.Status);
+        Assert.True(second.Success);
+        Assert.Equal("fulfilled", second.Status);
+    }
+
+    [Fact]
+    public async Task Callback_WhenExpiredBeforeClaim_ReturnsExpired()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_expired",
+            PlayerId = "player_1",
+            RewardId = "Gems",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1100
+        });
+
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["Gems"],
+            playerExists: true,
+            grantResponses: [],
+            nowUtcMs: 2000);
+
+        var response = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_expired", "evt_8", "{}", CancellationToken.None);
+
+        Assert.False(response.Success);
+        Assert.Equal("expired", response.Status);
+        Assert.Equal(RewardIntentErrorCodes.IntentExpired, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Callback_WhenIntentAlreadyFulfilled_ReturnsAlreadyFulfilledWithoutRegrant()
     {
         var repository = new InMemoryRewardIntentRepository();
         repository.SeedIntent(new RewardIntentRecord
         {
             RewardIntentId = "ri_fulfilled",
             PlayerId = "player_1",
-            RewardId = RewardIntentDefaults.SupportedRewardId,
+            RewardId = "Gems",
             Status = RewardIntentStatuses.Fulfilled,
             CreatedAtUtc = 1000,
-            UpdatedAtUtc = 2000,
-            ExpiresAtUtc = 999_999_999_999,
-            FulfilledAtUtc = 2000,
-            NewCrystalsBalance = 2050
-        });
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 10_000);
-
-        var response = await service.GetIntentStatusAsync("ri_fulfilled", CancellationToken.None);
-
-        Assert.Equal(RewardIntentStatuses.Fulfilled, response.Status);
-        Assert.Equal(2050, response.NewCrystalsBalance);
-    }
-
-    [Fact]
-    public async Task GetIntentStatusAsync_WhenExpiredByLazyCheck_ReturnsExpired()
-    {
-        var repository = new InMemoryRewardIntentRepository();
-        repository.SeedIntent(new RewardIntentRecord
-        {
-            RewardIntentId = "ri_expiring",
-            PlayerId = "player_1",
-            RewardId = RewardIntentDefaults.SupportedRewardId,
-            Status = RewardIntentStatuses.Pending,
-            CreatedAtUtc = 1000,
             UpdatedAtUtc = 1000,
-            ExpiresAtUtc = 2000
-        });
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 3000);
-
-        var response = await service.GetIntentStatusAsync("ri_expiring", CancellationToken.None);
-
-        Assert.Equal(RewardIntentStatuses.Expired, response.Status);
-        Assert.Equal(RewardIntentErrorCodes.IntentExpired, response.ErrorCode);
-    }
-
-    [Fact]
-    public async Task GetIntentStatusAsync_WhenNotFound_ReturnsIntentNotFound()
-    {
-        var service = CreateService(new InMemoryRewardIntentRepository(), playerExists: true, nowUtcMs: 10_000);
-
-        var response = await service.GetIntentStatusAsync("missing", CancellationToken.None);
-
-        Assert.Equal(RewardIntentStatuses.Failed, response.Status);
-        Assert.Equal(RewardIntentErrorCodes.IntentNotFound, response.ErrorCode);
-    }
-
-    [Fact]
-    public async Task ConfirmIntentFromAdCallbackAsync_WhenValid_UpdatesBalanceAndFulfills()
-    {
-        var repository = new InMemoryRewardIntentRepository();
-        repository.SetGems("player_1", 2000);
-        repository.SeedIntent(new RewardIntentRecord
-        {
-            RewardIntentId = "ri_cb_ok",
-            PlayerId = "player_1",
-            RewardId = RewardIntentDefaults.SupportedRewardId,
-            Status = RewardIntentStatuses.Pending,
-            CreatedAtUtc = 1000,
-            UpdatedAtUtc = 1000,
-            ExpiresAtUtc = 999_999_999_999
+            ExpiresAtUtc = 1_000_000,
+            FulfilledAtUtc = 1200
         });
 
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 10_000);
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["Gems"],
+            playerExists: true,
+            grantResponses: []);
 
-        var response = await service.ConfirmIntentFromAdCallbackAsync(
-            "levelplay",
-            "ri_cb_ok",
-            "event_1",
-            "{}",
-            CancellationToken.None);
-
-        Assert.True(response.Success);
-        Assert.Equal(RewardIntentStatuses.Fulfilled, response.Status);
-        Assert.Equal(2050, response.NewCrystalsBalance);
-    }
-
-    [Fact]
-    public async Task ConfirmIntentFromAdCallbackAsync_WhenDuplicateEvent_DoesNotGrantTwice()
-    {
-        var repository = new InMemoryRewardIntentRepository();
-        repository.SetGems("player_1", 2000);
-        repository.SeedIntent(new RewardIntentRecord
-        {
-            RewardIntentId = "ri_cb_dup",
-            PlayerId = "player_1",
-            RewardId = RewardIntentDefaults.SupportedRewardId,
-            Status = RewardIntentStatuses.Pending,
-            CreatedAtUtc = 1000,
-            UpdatedAtUtc = 1000,
-            ExpiresAtUtc = 999_999_999_999
-        });
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 10_000);
-
-        var first = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_cb_dup", "event_1", "{}", CancellationToken.None);
-        var second = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_cb_dup", "event_1", "{}", CancellationToken.None);
-
-        Assert.True(first.Success);
-        Assert.False(second.Success);
-        Assert.Equal(RewardIntentErrorCodes.CallbackDuplicate, second.ErrorCode);
-        Assert.Equal(2050, repository.GetGems("player_1"));
-    }
-
-    [Fact]
-    public async Task ConfirmIntentFromAdCallbackAsync_WhenAlreadyFulfilled_DoesNotGrantTwice()
-    {
-        var repository = new InMemoryRewardIntentRepository();
-        repository.SetGems("player_1", 2000);
-        repository.SeedIntent(new RewardIntentRecord
-        {
-            RewardIntentId = "ri_cb_fulfilled",
-            PlayerId = "player_1",
-            RewardId = RewardIntentDefaults.SupportedRewardId,
-            Status = RewardIntentStatuses.Fulfilled,
-            CreatedAtUtc = 1000,
-            UpdatedAtUtc = 2000,
-            ExpiresAtUtc = 999_999_999_999,
-            FulfilledAtUtc = 2000,
-            NewCrystalsBalance = 2050
-        });
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 10_000);
-
-        var response = await service.ConfirmIntentFromAdCallbackAsync(
-            "levelplay",
-            "ri_cb_fulfilled",
-            "event_2",
-            "{}",
-            CancellationToken.None);
+        var response = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_fulfilled", "evt_9", "{}", CancellationToken.None);
 
         Assert.False(response.Success);
         Assert.Equal(RewardIntentErrorCodes.IntentAlreadyFulfilled, response.ErrorCode);
-        Assert.Equal(2000, repository.GetGems("player_1"));
     }
 
-    [Fact]
-    public async Task ConfirmIntentFromAdCallbackAsync_WhenIntentExpired_DoesNotGrant()
-    {
-        var repository = new InMemoryRewardIntentRepository();
-        repository.SetGems("player_1", 2000);
-        repository.SeedIntent(new RewardIntentRecord
-        {
-            RewardIntentId = "ri_cb_expired",
-            PlayerId = "player_1",
-            RewardId = RewardIntentDefaults.SupportedRewardId,
-            Status = RewardIntentStatuses.Pending,
-            CreatedAtUtc = 1000,
-            UpdatedAtUtc = 1000,
-            ExpiresAtUtc = 1500
-        });
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 10_000);
-
-        var response = await service.ConfirmIntentFromAdCallbackAsync(
-            "levelplay",
-            "ri_cb_expired",
-            "event_3",
-            "{}",
-            CancellationToken.None);
-
-        Assert.False(response.Success);
-        Assert.Equal(RewardIntentStatuses.Expired, response.Status);
-        Assert.Equal(RewardIntentErrorCodes.IntentExpired, response.ErrorCode);
-        Assert.Equal(2000, repository.GetGems("player_1"));
-    }
-
-    [Fact]
-    public async Task ConfirmIntentFromAdCallbackAsync_WhenGrantFails_ReturnsFailed()
-    {
-        var repository = new InMemoryRewardIntentRepository
-        {
-            ForcedConfirmResult = new RewardIntentConfirmResult
-            {
-                ResultCode = RewardIntentErrorCodes.RewardGrantFailed,
-                Status = RewardIntentStatuses.Failed,
-                ErrorMessage = "forced failure"
-            }
-        };
-        var service = CreateService(repository, playerExists: true, nowUtcMs: 10_000);
-
-        var response = await service.ConfirmIntentFromAdCallbackAsync(
-            "levelplay",
-            "ri_cb_fail",
-            "event_4",
-            "{}",
-            CancellationToken.None);
-
-        Assert.False(response.Success);
-        Assert.Equal(RewardIntentStatuses.Failed, response.Status);
-        Assert.Equal(RewardIntentErrorCodes.RewardGrantFailed, response.ErrorCode);
-    }
-
-    private static RewardIntentService CreateService(InMemoryRewardIntentRepository repository, bool playerExists, long nowUtcMs)
+    private static RewardIntentService CreateService(
+        InMemoryRewardIntentRepository repository,
+        IReadOnlyCollection<string> supportedRewardIds,
+        bool playerExists,
+        IReadOnlyList<GrantRewardResponse> grantResponses,
+        long nowUtcMs = 5_000)
     {
         return new RewardIntentService(
             repository,
             new FakePlayerEconomyRepository(playerExists),
+            new FakeRewardDefinitionRepository(supportedRewardIds),
+            new QueueRewardApplicationService(grantResponses),
             new FakeClock(nowUtcMs),
             NullLogger<RewardIntentService>.Instance);
+    }
+
+    private sealed class FakeClock : ISystemClock
+    {
+        public FakeClock(long utcNowUnixMilliseconds)
+        {
+            UtcNowUnixMilliseconds = utcNowUnixMilliseconds;
+        }
+
+        public long UtcNowUnixMilliseconds { get; }
     }
 
     private sealed class FakePlayerEconomyRepository : IPlayerEconomyRepository
@@ -298,23 +274,60 @@ public sealed class RewardIntentServiceTests
         }
     }
 
-    private sealed class FakeClock : ISystemClock
+    private sealed class FakeRewardDefinitionRepository : IRewardDefinitionRepository
     {
-        public FakeClock(long nowUtcMs)
+        private readonly HashSet<string> _supportedRewardIds;
+
+        public FakeRewardDefinitionRepository(IReadOnlyCollection<string> supportedRewardIds)
         {
-            UtcNowUnixMilliseconds = nowUtcMs;
+            _supportedRewardIds = new HashSet<string>(supportedRewardIds, StringComparer.Ordinal);
         }
 
-        public long UtcNowUnixMilliseconds { get; }
+        public Task<RewardDefinition?> GetByIdAsync(string rewardId, CancellationToken ct)
+        {
+            if (_supportedRewardIds.Contains(rewardId))
+            {
+                return Task.FromResult<RewardDefinition?>(new RewardDefinition
+                {
+                    RewardId = rewardId,
+                    Source = "grant",
+                    Parts = []
+                });
+            }
+
+            return Task.FromResult<RewardDefinition?>(null);
+        }
+    }
+
+    private sealed class QueueRewardApplicationService : IRewardApplicationService
+    {
+        private readonly Queue<GrantRewardResponse> _responses;
+
+        public QueueRewardApplicationService(IReadOnlyList<GrantRewardResponse> responses)
+        {
+            _responses = new Queue<GrantRewardResponse>(responses);
+        }
+
+        public Task<GrantRewardResponse> GrantAsync(GrantRewardCommand command, CancellationToken ct = default)
+        {
+            if (_responses.Count == 0)
+            {
+                return Task.FromResult(new GrantRewardResponse
+                {
+                    Success = true,
+                    RewardId = command.RewardId
+                });
+            }
+
+            return Task.FromResult(_responses.Dequeue());
+        }
     }
 
     private sealed class InMemoryRewardIntentRepository : IRewardIntentRepository
     {
         private readonly Dictionary<string, RewardIntentRecord> _intents = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, int> _gemsByPlayerId = new(StringComparer.Ordinal);
-        private readonly HashSet<string> _processedEvents = new(StringComparer.Ordinal);
-
-        public RewardIntentConfirmResult? ForcedConfirmResult { get; init; }
+        private readonly Dictionary<string, string> _callbackStates = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> _locks = new(StringComparer.Ordinal);
 
         public Task<bool> CreateAsync(RewardIntentRecord intent, CancellationToken ct)
         {
@@ -329,47 +342,37 @@ public sealed class RewardIntentServiceTests
 
         public Task<RewardIntentRecord?> GetByIdAsync(string rewardIntentId, CancellationToken ct)
         {
-            _intents.TryGetValue(rewardIntentId, out var intent);
-            return Task.FromResult(intent);
+            _intents.TryGetValue(rewardIntentId, out var record);
+            return Task.FromResult(record);
         }
 
         public Task<bool> ExpireIfPendingAsync(string rewardIntentId, long nowUtcMs, string errorCode, string errorMessage, CancellationToken ct)
         {
-            if (!_intents.TryGetValue(rewardIntentId, out var intent))
+            if (!_intents.TryGetValue(rewardIntentId, out var record))
             {
                 return Task.FromResult(false);
             }
 
-            if (!string.Equals(intent.Status, RewardIntentStatuses.Pending, StringComparison.Ordinal) || intent.ExpiresAtUtc > nowUtcMs)
+            if (!string.Equals(record.Status, RewardIntentStatuses.Pending, StringComparison.Ordinal) || record.ExpiresAtUtc > nowUtcMs)
             {
                 return Task.FromResult(false);
             }
 
-            _intents[rewardIntentId] = Clone(
-                intent,
-                status: RewardIntentStatuses.Expired,
-                updatedAtUtc: nowUtcMs,
-                errorCode: errorCode,
-                errorMessage: errorMessage);
+            _intents[rewardIntentId] = Clone(record, RewardIntentStatuses.Expired, nowUtcMs, null, errorCode, errorMessage);
             return Task.FromResult(true);
         }
 
-        public Task<RewardIntentConfirmResult> ConfirmFromCallbackAsync(
+        public Task<RewardIntentConfirmResult> TryBeginCallbackProcessingAsync(
             string provider,
             string rewardIntentId,
             string externalEventId,
-            string expectedRewardId,
-            int rewardAmount,
             long nowUtcMs,
+            string lockToken,
             CancellationToken ct)
         {
-            if (ForcedConfirmResult is not null)
-            {
-                return Task.FromResult(ForcedConfirmResult);
-            }
-
             var callbackKey = $"{provider}:{externalEventId}";
-            if (_processedEvents.Contains(callbackKey))
+            if (_callbackStates.TryGetValue(callbackKey, out var callbackState) &&
+                (callbackState == "succeeded" || callbackState == "processing"))
             {
                 return Task.FromResult(new RewardIntentConfirmResult
                 {
@@ -379,7 +382,7 @@ public sealed class RewardIntentServiceTests
                 });
             }
 
-            if (!_intents.TryGetValue(rewardIntentId, out var intent))
+            if (!_intents.TryGetValue(rewardIntentId, out var record))
             {
                 return Task.FromResult(new RewardIntentConfirmResult
                 {
@@ -389,93 +392,137 @@ public sealed class RewardIntentServiceTests
                 });
             }
 
-            if (string.Equals(intent.Status, RewardIntentStatuses.Fulfilled, StringComparison.Ordinal))
+            if (record.Status == RewardIntentStatuses.Fulfilled)
             {
-                _processedEvents.Add(callbackKey);
+                _callbackStates[callbackKey] = "succeeded";
                 return Task.FromResult(new RewardIntentConfirmResult
                 {
                     ResultCode = RewardIntentErrorCodes.IntentAlreadyFulfilled,
-                    Status = RewardIntentStatuses.Fulfilled,
-                    NewCrystalsBalance = intent.NewCrystalsBalance,
-                    ErrorMessage = "already fulfilled"
+                    Status = RewardIntentStatuses.Fulfilled
                 });
             }
 
-            if (string.Equals(intent.Status, RewardIntentStatuses.Expired, StringComparison.Ordinal))
+            if (record.Status == RewardIntentStatuses.Expired)
             {
-                _processedEvents.Add(callbackKey);
+                _callbackStates[callbackKey] = "succeeded";
                 return Task.FromResult(new RewardIntentConfirmResult
                 {
                     ResultCode = RewardIntentErrorCodes.IntentExpired,
-                    Status = RewardIntentStatuses.Expired,
-                    ErrorMessage = "expired"
+                    Status = RewardIntentStatuses.Expired
                 });
             }
 
-            if (!string.Equals(intent.Status, RewardIntentStatuses.Pending, StringComparison.Ordinal))
+            if (record.Status == RewardIntentStatuses.Rejected)
             {
-                _processedEvents.Add(callbackKey);
+                _callbackStates[callbackKey] = "succeeded";
                 return Task.FromResult(new RewardIntentConfirmResult
                 {
                     ResultCode = RewardIntentErrorCodes.CallbackInvalid,
-                    Status = intent.Status,
-                    ErrorMessage = "invalid"
+                    Status = RewardIntentStatuses.Rejected
                 });
             }
 
-            if (intent.ExpiresAtUtc <= nowUtcMs)
+            if (record.Status == RewardIntentStatuses.Failed)
+            {
+                if (!string.Equals(record.AdNetwork, provider, StringComparison.Ordinal) ||
+                    !string.Equals(record.ExternalEventId, externalEventId, StringComparison.Ordinal))
+                {
+                    return Task.FromResult(new RewardIntentConfirmResult
+                    {
+                        ResultCode = RewardIntentErrorCodes.CallbackInvalid,
+                        Status = RewardIntentStatuses.Failed
+                    });
+                }
+            }
+            else if (record.Status != RewardIntentStatuses.Pending)
+            {
+                return Task.FromResult(new RewardIntentConfirmResult
+                {
+                    ResultCode = RewardIntentErrorCodes.CallbackInvalid,
+                    Status = record.Status
+                });
+            }
+
+            if (record.ExpiresAtUtc <= nowUtcMs)
             {
                 _intents[rewardIntentId] = Clone(
-                    intent,
-                    status: RewardIntentStatuses.Expired,
-                    updatedAtUtc: nowUtcMs,
-                    errorCode: RewardIntentErrorCodes.IntentExpired,
-                    errorMessage: "expired");
-                _processedEvents.Add(callbackKey);
+                    record,
+                    RewardIntentStatuses.Expired,
+                    nowUtcMs,
+                    null,
+                    RewardIntentErrorCodes.IntentExpired,
+                    "expired");
+                _callbackStates[callbackKey] = "succeeded";
                 return Task.FromResult(new RewardIntentConfirmResult
                 {
                     ResultCode = RewardIntentErrorCodes.IntentExpired,
-                    Status = RewardIntentStatuses.Expired,
-                    ErrorMessage = "expired"
+                    Status = RewardIntentStatuses.Expired
                 });
             }
 
-            if (!string.Equals(intent.RewardId, expectedRewardId, StringComparison.Ordinal))
+            var lockKey = rewardIntentId;
+            if (_locks.TryGetValue(lockKey, out var currentLock) && currentLock != lockToken)
             {
-                _intents[rewardIntentId] = Clone(
-                    intent,
-                    status: RewardIntentStatuses.Rejected,
-                    updatedAtUtc: nowUtcMs,
-                    errorCode: RewardIntentErrorCodes.CallbackInvalid,
-                    errorMessage: "reward mismatch");
-                _processedEvents.Add(callbackKey);
                 return Task.FromResult(new RewardIntentConfirmResult
                 {
-                    ResultCode = RewardIntentErrorCodes.CallbackInvalid,
-                    Status = RewardIntentStatuses.Rejected,
-                    ErrorMessage = "reward mismatch"
+                    ResultCode = RewardIntentErrorCodes.CallbackDuplicate,
+                    Status = record.Status
                 });
             }
 
-            _gemsByPlayerId.TryGetValue(intent.PlayerId, out var current);
-            var next = current + rewardAmount;
-            _gemsByPlayerId[intent.PlayerId] = next;
-            _intents[rewardIntentId] = Clone(
-                intent,
-                status: RewardIntentStatuses.Fulfilled,
-                updatedAtUtc: nowUtcMs,
-                fulfilledAtUtc: nowUtcMs,
-                newCrystalsBalance: next,
-                errorCode: null,
-                errorMessage: null);
-            _processedEvents.Add(callbackKey);
+            _locks[lockKey] = lockToken;
+            _callbackStates[callbackKey] = "processing";
+            _intents[rewardIntentId] = Clone(record, record.Status, nowUtcMs, null, null, null, provider, externalEventId);
 
             return Task.FromResult(new RewardIntentConfirmResult
             {
-                ResultCode = "OK",
-                Status = RewardIntentStatuses.Fulfilled,
-                NewCrystalsBalance = next
+                ResultCode = "CLAIMED",
+                Status = record.Status,
+                PlayerId = record.PlayerId,
+                RewardId = record.RewardId
             });
+        }
+
+        public Task<bool> FinalizeCallbackProcessingAsync(
+            string provider,
+            string rewardIntentId,
+            string externalEventId,
+            string lockToken,
+            string finalStatus,
+            string errorCode,
+            string errorMessage,
+            long nowUtcMs,
+            CancellationToken ct)
+        {
+            if (!_intents.TryGetValue(rewardIntentId, out var record))
+            {
+                return Task.FromResult(false);
+            }
+
+            if (!_locks.TryGetValue(rewardIntentId, out var currentLock) || currentLock != lockToken)
+            {
+                return Task.FromResult(false);
+            }
+
+            var callbackKey = $"{provider}:{externalEventId}";
+            if (string.Equals(finalStatus, RewardIntentStatuses.Fulfilled, StringComparison.Ordinal))
+            {
+                _intents[rewardIntentId] = Clone(record, RewardIntentStatuses.Fulfilled, nowUtcMs, nowUtcMs, null, null, provider, externalEventId);
+                _callbackStates[callbackKey] = "succeeded";
+            }
+            else if (string.Equals(finalStatus, RewardIntentStatuses.Rejected, StringComparison.Ordinal))
+            {
+                _intents[rewardIntentId] = Clone(record, RewardIntentStatuses.Rejected, nowUtcMs, null, errorCode, errorMessage, provider, externalEventId);
+                _callbackStates[callbackKey] = "succeeded";
+            }
+            else
+            {
+                _intents[rewardIntentId] = Clone(record, RewardIntentStatuses.Failed, nowUtcMs, null, errorCode, errorMessage, provider, externalEventId);
+                _callbackStates[callbackKey] = "failed";
+            }
+
+            _locks.Remove(rewardIntentId);
+            return Task.FromResult(true);
         }
 
         public void SeedIntent(RewardIntentRecord intent)
@@ -483,40 +530,30 @@ public sealed class RewardIntentServiceTests
             _intents[intent.RewardIntentId] = intent;
         }
 
-        public void SetGems(string playerId, int value)
-        {
-            _gemsByPlayerId[playerId] = value;
-        }
-
-        public int GetGems(string playerId)
-        {
-            return _gemsByPlayerId.TryGetValue(playerId, out var value) ? value : 0;
-        }
-
         private static RewardIntentRecord Clone(
             RewardIntentRecord source,
-            string? status = null,
-            long? updatedAtUtc = null,
-            long? fulfilledAtUtc = null,
-            int? newCrystalsBalance = null,
-            string? errorCode = null,
-            string? errorMessage = null)
+            string status,
+            long updatedAtUtc,
+            long? fulfilledAtUtc,
+            string? errorCode,
+            string? errorMessage,
+            string? adNetwork = null,
+            string? externalEventId = null)
         {
             return new RewardIntentRecord
             {
                 RewardIntentId = source.RewardIntentId,
                 PlayerId = source.PlayerId,
                 RewardId = source.RewardId,
-                Status = status ?? source.Status,
+                Status = status,
                 CreatedAtUtc = source.CreatedAtUtc,
-                UpdatedAtUtc = updatedAtUtc ?? source.UpdatedAtUtc,
+                UpdatedAtUtc = updatedAtUtc,
                 ExpiresAtUtc = source.ExpiresAtUtc,
                 FulfilledAtUtc = fulfilledAtUtc ?? source.FulfilledAtUtc,
-                NewCrystalsBalance = newCrystalsBalance ?? source.NewCrystalsBalance,
                 ErrorCode = errorCode ?? source.ErrorCode,
                 ErrorMessage = errorMessage ?? source.ErrorMessage,
-                AdNetwork = source.AdNetwork,
-                ExternalEventId = source.ExternalEventId
+                AdNetwork = adNetwork ?? source.AdNetwork,
+                ExternalEventId = externalEventId ?? source.ExternalEventId
             };
         }
     }

@@ -1,5 +1,6 @@
 using GameServer.Api.Models.Domain.RewardIntents;
 using GameServer.Api.Models.Dto.RewardIntents;
+using GameServer.Api.Models.Dto.Rewards;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services.Interfaces;
 
@@ -7,19 +8,27 @@ namespace GameServer.Api.Services;
 
 public sealed class RewardIntentService : IRewardIntentService
 {
+    private static readonly TimeSpan IntentTtl = TimeSpan.FromMinutes(30);
+
     private readonly IRewardIntentRepository _rewardIntentRepository;
     private readonly IPlayerEconomyRepository _playerEconomyRepository;
+    private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
+    private readonly IRewardApplicationService _rewardApplicationService;
     private readonly ISystemClock _clock;
     private readonly ILogger<RewardIntentService> _logger;
 
     public RewardIntentService(
         IRewardIntentRepository rewardIntentRepository,
         IPlayerEconomyRepository playerEconomyRepository,
+        IRewardDefinitionRepository rewardDefinitionRepository,
+        IRewardApplicationService rewardApplicationService,
         ISystemClock clock,
         ILogger<RewardIntentService> logger)
     {
         _rewardIntentRepository = rewardIntentRepository;
         _playerEconomyRepository = playerEconomyRepository;
+        _rewardDefinitionRepository = rewardDefinitionRepository;
+        _rewardApplicationService = rewardApplicationService;
         _clock = clock;
         _logger = logger;
     }
@@ -31,7 +40,8 @@ public sealed class RewardIntentService : IRewardIntentService
             return BuildCreateFailure(RewardIntentErrorCodes.ValidationError, "playerId and rewardId are required.");
         }
 
-        if (!string.Equals(rewardId, RewardIntentDefaults.SupportedRewardId, StringComparison.Ordinal))
+        var rewardDefinition = await _rewardDefinitionRepository.GetByIdAsync(rewardId, ct);
+        if (rewardDefinition is null)
         {
             return BuildCreateFailure(RewardIntentErrorCodes.RewardNotSupported, $"Reward '{rewardId}' is not supported.");
         }
@@ -43,7 +53,7 @@ public sealed class RewardIntentService : IRewardIntentService
         }
 
         var createdAtUtc = _clock.UtcNowUnixMilliseconds;
-        var expiresAtUtc = createdAtUtc + (long)RewardIntentDefaults.IntentTtl.TotalMilliseconds;
+        var expiresAtUtc = createdAtUtc + (long)IntentTtl.TotalMilliseconds;
 
         for (var attempt = 0; attempt < 3; attempt++)
         {
@@ -165,66 +175,110 @@ public sealed class RewardIntentService : IRewardIntentService
             externalEventId,
             callbackPayload?.Length ?? 0);
 
-        var result = await _rewardIntentRepository.ConfirmFromCallbackAsync(
+        var lockToken = Guid.NewGuid().ToString("N");
+        var beginResult = await _rewardIntentRepository.TryBeginCallbackProcessingAsync(
             provider,
             rewardIntentId,
             externalEventId,
-            RewardIntentDefaults.SupportedRewardId,
-            RewardIntentDefaults.GemsAmount,
+            _clock.UtcNowUnixMilliseconds,
+            lockToken,
+            ct);
+
+        if (!string.Equals(beginResult.ResultCode, "CLAIMED", StringComparison.Ordinal))
+        {
+            LogBeginFailure(provider, rewardIntentId, externalEventId, beginResult);
+            return new ConfirmRewardIntentCallbackResponse
+            {
+                Success = false,
+                Status = NormalizeStatus(beginResult.Status),
+                ErrorCode = beginResult.ResultCode,
+                ErrorMessage = beginResult.ErrorMessage
+            };
+        }
+
+        if (string.IsNullOrWhiteSpace(beginResult.PlayerId) || string.IsNullOrWhiteSpace(beginResult.RewardId))
+        {
+            await _rewardIntentRepository.FinalizeCallbackProcessingAsync(
+                provider,
+                rewardIntentId,
+                externalEventId,
+                lockToken,
+                RewardIntentStatuses.Failed,
+                RewardIntentErrorCodes.RewardGrantFailed,
+                "Claimed callback is missing playerId/rewardId.",
+                _clock.UtcNowUnixMilliseconds,
+                ct);
+
+            return new ConfirmRewardIntentCallbackResponse
+            {
+                Success = false,
+                Status = RewardIntentStatuses.Failed,
+                ErrorCode = RewardIntentErrorCodes.RewardGrantFailed,
+                ErrorMessage = "Claimed callback is missing playerId/rewardId."
+            };
+        }
+
+        var grantResponse = await _rewardApplicationService.GrantAsync(
+            new GrantRewardCommand
+            {
+                PlayerId = beginResult.PlayerId,
+                RewardId = beginResult.RewardId,
+                RewardSource = "reward_intent_callback"
+            },
+            ct);
+
+        var (finalStatus, finalErrorCode, finalErrorMessage) = MapGrantResult(grantResponse);
+
+        var finalized = await _rewardIntentRepository.FinalizeCallbackProcessingAsync(
+            provider,
+            rewardIntentId,
+            externalEventId,
+            lockToken,
+            finalStatus,
+            finalErrorCode,
+            finalErrorMessage,
             _clock.UtcNowUnixMilliseconds,
             ct);
 
-        if (string.Equals(result.ResultCode, "OK", StringComparison.Ordinal))
+        if (!finalized)
+        {
+            _logger.LogError(
+                "Reward callback finalization failed. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}",
+                rewardIntentId,
+                provider,
+                externalEventId);
+            return new ConfirmRewardIntentCallbackResponse
+            {
+                Success = false,
+                Status = RewardIntentStatuses.Failed,
+                ErrorCode = RewardIntentErrorCodes.RewardGrantFailed,
+                ErrorMessage = "Reward callback finalization failed."
+            };
+        }
+
+        if (string.Equals(finalStatus, RewardIntentStatuses.Fulfilled, StringComparison.Ordinal))
         {
             _logger.LogInformation(
-                "Reward granted from callback. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}, NewCrystalsBalance: {NewCrystalsBalance}",
+                "Reward granted from callback through standard grant flow. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}, RewardId: {RewardId}",
                 rewardIntentId,
                 provider,
                 externalEventId,
-                result.NewCrystalsBalance);
+                beginResult.RewardId);
             return new ConfirmRewardIntentCallbackResponse
             {
                 Success = true,
                 Status = RewardIntentStatuses.Fulfilled,
-                NewCrystalsBalance = result.NewCrystalsBalance
+                ErrorCode = null,
+                ErrorMessage = null
             };
-        }
-
-        if (string.Equals(result.ResultCode, RewardIntentErrorCodes.CallbackDuplicate, StringComparison.Ordinal))
-        {
-            _logger.LogInformation(
-                "Reward callback duplicate ignored. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}",
-                rewardIntentId,
-                provider,
-                externalEventId);
-        }
-        else if (string.Equals(result.ResultCode, RewardIntentErrorCodes.CallbackInvalid, StringComparison.Ordinal))
-        {
-            _logger.LogWarning(
-                "Reward callback invalid. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}, Status: {Status}",
-                rewardIntentId,
-                provider,
-                externalEventId,
-                result.Status);
-        }
-        else if (string.Equals(result.ResultCode, RewardIntentErrorCodes.RewardGrantFailed, StringComparison.Ordinal))
-        {
-            _logger.LogError(
-                "Reward grant failed during callback processing. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}",
-                rewardIntentId,
-                provider,
-                externalEventId);
         }
 
         return new ConfirmRewardIntentCallbackResponse
         {
             Success = false,
-            Status = NormalizeStatus(result.Status),
-            NewCrystalsBalance = string.Equals(result.Status, RewardIntentStatuses.Fulfilled, StringComparison.Ordinal)
-                ? result.NewCrystalsBalance
-                : null,
-            ErrorCode = result.ResultCode,
-            ErrorMessage = result.ErrorMessage
+            Status = finalStatus,
+            ErrorCode = finalErrorCode,
+            ErrorMessage = finalErrorMessage
         };
     }
 
@@ -245,11 +299,71 @@ public sealed class RewardIntentService : IRewardIntentService
         return new GetRewardIntentStatusResponse
         {
             Status = status,
-            NewCrystalsBalance = string.Equals(status, RewardIntentStatuses.Fulfilled, StringComparison.Ordinal)
-                ? intent.NewCrystalsBalance
-                : null,
             ErrorCode = string.Equals(status, RewardIntentStatuses.Pending, StringComparison.Ordinal) ? null : intent.ErrorCode,
             ErrorMessage = string.Equals(status, RewardIntentStatuses.Pending, StringComparison.Ordinal) ? null : intent.ErrorMessage
+        };
+    }
+
+    private void LogBeginFailure(string provider, string rewardIntentId, string externalEventId, RewardIntentConfirmResult beginResult)
+    {
+        if (string.Equals(beginResult.ResultCode, RewardIntentErrorCodes.CallbackDuplicate, StringComparison.Ordinal))
+        {
+            _logger.LogInformation(
+                "Reward callback duplicate ignored. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}",
+                rewardIntentId,
+                provider,
+                externalEventId);
+            return;
+        }
+
+        if (string.Equals(beginResult.ResultCode, RewardIntentErrorCodes.CallbackInvalid, StringComparison.Ordinal))
+        {
+            _logger.LogWarning(
+                "Reward callback invalid. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}, Status: {Status}",
+                rewardIntentId,
+                provider,
+                externalEventId,
+                beginResult.Status);
+            return;
+        }
+
+        _logger.LogError(
+            "Reward callback rejected before grant execution. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}, Code: {Code}",
+            rewardIntentId,
+            provider,
+            externalEventId,
+            beginResult.ResultCode);
+    }
+
+    private static (string FinalStatus, string ErrorCode, string ErrorMessage) MapGrantResult(GrantRewardResponse grantResponse)
+    {
+        if (grantResponse.Success)
+        {
+            return (RewardIntentStatuses.Fulfilled, string.Empty, string.Empty);
+        }
+
+        return grantResponse.ErrorCode switch
+        {
+            RewardErrorCodes.PlayerNotFound => (
+                RewardIntentStatuses.Rejected,
+                RewardIntentErrorCodes.PlayerNotFound,
+                grantResponse.ErrorMessage ?? "Player was not found."),
+            RewardErrorCodes.RewardNotFound => (
+                RewardIntentStatuses.Rejected,
+                RewardIntentErrorCodes.RewardNotSupported,
+                grantResponse.ErrorMessage ?? "Reward was not found."),
+            RewardErrorCodes.UnsupportedRewardKind => (
+                RewardIntentStatuses.Failed,
+                RewardIntentErrorCodes.RewardGrantFailed,
+                grantResponse.ErrorMessage ?? "Unsupported reward kind."),
+            RewardErrorCodes.RewardApplicationFailed => (
+                RewardIntentStatuses.Failed,
+                RewardIntentErrorCodes.RewardGrantFailed,
+                grantResponse.ErrorMessage ?? "Reward grant failed."),
+            _ => (
+                RewardIntentStatuses.Failed,
+                RewardIntentErrorCodes.RewardGrantFailed,
+                grantResponse.ErrorMessage ?? "Reward grant failed.")
         };
     }
 

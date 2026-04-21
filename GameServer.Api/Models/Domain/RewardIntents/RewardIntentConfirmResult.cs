@@ -6,6 +6,7 @@ public sealed class RewardIntentConfirmResult
 {
     public string ResultCode { get; init; } = RewardIntentErrorCodes.RewardGrantFailed;
     public string Status { get; init; } = RewardIntentStatuses.Failed;
-    public int? NewCrystalsBalance { get; init; }
+    public string? PlayerId { get; init; }
+    public string? RewardId { get; init; }
     public string? ErrorMessage { get; init; }
 }
