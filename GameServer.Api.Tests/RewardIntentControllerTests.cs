@@ -101,6 +101,69 @@ public sealed class RewardIntentControllerTests
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
+    [Fact]
+    public async Task CallbackGet_MinimalContract_MapsQueryToServiceCall()
+    {
+        var stub = new StubService
+        {
+            CallbackResponse = new ConfirmRewardIntentCallbackResponse
+            {
+                Success = true,
+                Status = RewardIntentStatuses.Fulfilled
+            }
+        };
+        var controller = CreateController(stub);
+
+        var result = await controller.ConfirmCallbackGet(
+            "ri_1",
+            "evt_1",
+            "Gems",
+            null,
+            null,
+            null,
+            null,
+            null,
+            CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("unknown", stub.LastProvider);
+        Assert.Equal("ri_1", stub.LastRewardIntentId);
+        Assert.Equal("evt_1", stub.LastExternalEventId);
+        Assert.NotNull(stub.LastPayload);
+        Assert.Contains("\"rewards\":\"Gems\"", stub.LastPayload!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CallbackGet_FullContract_UsesAdNetworkAsProvider()
+    {
+        var stub = new StubService
+        {
+            CallbackResponse = new ConfirmRewardIntentCallbackResponse
+            {
+                Success = true,
+                Status = RewardIntentStatuses.Fulfilled
+            }
+        };
+        var controller = CreateController(stub);
+
+        var result = await controller.ConfirmCallbackGet(
+            "ri_2",
+            "evt_2",
+            "Gems",
+            "auc_1",
+            "ironsource",
+            "app_1",
+            "item_1",
+            "placement_1",
+            CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal("ironsource", stub.LastProvider);
+        Assert.NotNull(stub.LastPayload);
+        Assert.Contains("\"auctionId\":\"auc_1\"", stub.LastPayload!, StringComparison.Ordinal);
+        Assert.Contains("\"placementName\":\"placement_1\"", stub.LastPayload!, StringComparison.Ordinal);
+    }
+
     private static RewardIntentController CreateController(IRewardIntentService service)
     {
         return new RewardIntentController(
@@ -113,6 +176,10 @@ public sealed class RewardIntentControllerTests
         public CreateRewardIntentResponse CreateResponse { get; init; } = new() { Success = true, RewardIntentId = "ri_1" };
         public GetRewardIntentStatusResponse StatusResponse { get; init; } = new() { Status = RewardIntentStatuses.Pending };
         public ConfirmRewardIntentCallbackResponse CallbackResponse { get; init; } = new() { Success = true, Status = RewardIntentStatuses.Fulfilled };
+        public string? LastProvider { get; private set; }
+        public string? LastRewardIntentId { get; private set; }
+        public string? LastExternalEventId { get; private set; }
+        public string? LastPayload { get; private set; }
 
         public Task<CreateRewardIntentResponse> CreateIntentAsync(string playerId, string rewardId, CancellationToken ct = default)
         {
@@ -131,6 +198,10 @@ public sealed class RewardIntentControllerTests
             string? callbackPayload,
             CancellationToken ct = default)
         {
+            LastProvider = provider;
+            LastRewardIntentId = rewardIntentId;
+            LastExternalEventId = externalEventId;
+            LastPayload = callbackPayload;
             return Task.FromResult(CallbackResponse);
         }
     }

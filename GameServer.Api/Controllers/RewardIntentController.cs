@@ -2,6 +2,7 @@ using GameServer.Api.Models.Dto.RewardIntents;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace GameServer.Api.Controllers;
 
@@ -54,6 +55,44 @@ public sealed class RewardIntentController : ControllerBase
             request.Provider,
             request.RewardIntentId,
             request.ExternalEventId,
+            payload,
+            ct);
+
+        return response.ErrorCode switch
+        {
+            RewardIntentErrorCodes.ValidationError => BadRequest(response),
+            RewardIntentErrorCodes.IntentNotFound => NotFound(response),
+            _ => Ok(response)
+        };
+    }
+
+    [HttpGet("callback")]
+    public async Task<ActionResult<ConfirmRewardIntentCallbackResponse>> ConfirmCallbackGet(
+        [FromQuery] string? rewardIntentId,
+        [FromQuery(Name = "eventId")] string? eventId,
+        [FromQuery] string? rewards,
+        [FromQuery] string? auctionId,
+        [FromQuery] string? adNetwork,
+        [FromQuery] string? appKey,
+        [FromQuery] string? itemName,
+        [FromQuery] string? placementName,
+        CancellationToken ct)
+    {
+        var provider = string.IsNullOrWhiteSpace(adNetwork) ? "unknown" : adNetwork!;
+        var payload = JsonSerializer.Serialize(new Dictionary<string, string?>(StringComparer.Ordinal)
+        {
+            ["rewards"] = rewards,
+            ["auctionId"] = auctionId,
+            ["adNetwork"] = adNetwork,
+            ["appKey"] = appKey,
+            ["itemName"] = itemName,
+            ["placementName"] = placementName
+        });
+
+        var response = await _rewardIntentService.ConfirmIntentFromAdCallbackAsync(
+            provider,
+            rewardIntentId ?? string.Empty,
+            eventId ?? string.Empty,
             payload,
             ct);
 
