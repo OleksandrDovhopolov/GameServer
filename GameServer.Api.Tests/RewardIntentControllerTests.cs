@@ -115,9 +115,10 @@ public sealed class RewardIntentControllerTests
         var controller = CreateController(stub);
 
         var result = await controller.ConfirmCallbackGet(
-            "ri_1",
+            "player_1",
             "evt_1",
             "Gems",
+            "ri_1",
             null,
             null,
             null,
@@ -130,6 +131,8 @@ public sealed class RewardIntentControllerTests
         Assert.Equal("ri_1", stub.LastRewardIntentId);
         Assert.Equal("evt_1", stub.LastExternalEventId);
         Assert.NotNull(stub.LastPayload);
+        Assert.Contains("\"playerId\":\"player_1\"", stub.LastPayload!, StringComparison.Ordinal);
+        Assert.Contains("\"dynamicUserId\":\"ri_1\"", stub.LastPayload!, StringComparison.Ordinal);
         Assert.Contains("\"rewards\":\"Gems\"", stub.LastPayload!, StringComparison.Ordinal);
     }
 
@@ -147,9 +150,10 @@ public sealed class RewardIntentControllerTests
         var controller = CreateController(stub);
 
         var result = await controller.ConfirmCallbackGet(
-            "ri_2",
+            "player_2",
             "evt_2",
             "Gems",
+            "ri_2",
             "auc_1",
             "ironsource",
             "app_1",

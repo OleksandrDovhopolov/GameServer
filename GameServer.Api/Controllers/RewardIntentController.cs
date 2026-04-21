@@ -68,9 +68,10 @@ public sealed class RewardIntentController : ControllerBase
 
     [HttpGet("callback")]
     public async Task<ActionResult<ConfirmRewardIntentCallbackResponse>> ConfirmCallbackGet(
-        [FromQuery] string? rewardIntentId,
+        [FromQuery(Name = "rewardIntentId")] string? playerId,
         [FromQuery(Name = "eventId")] string? eventId,
         [FromQuery] string? rewards,
+        [FromQuery] string? dynamicUserId,
         [FromQuery] string? auctionId,
         [FromQuery] string? adNetwork,
         [FromQuery] string? appKey,
@@ -81,6 +82,8 @@ public sealed class RewardIntentController : ControllerBase
         var provider = string.IsNullOrWhiteSpace(adNetwork) ? "unknown" : adNetwork!;
         var payload = JsonSerializer.Serialize(new Dictionary<string, string?>(StringComparer.Ordinal)
         {
+            ["playerId"] = playerId,
+            ["dynamicUserId"] = dynamicUserId,
             ["rewards"] = rewards,
             ["auctionId"] = auctionId,
             ["adNetwork"] = adNetwork,
@@ -91,7 +94,7 @@ public sealed class RewardIntentController : ControllerBase
 
         var response = await _rewardIntentService.ConfirmIntentFromAdCallbackAsync(
             provider,
-            rewardIntentId ?? string.Empty,
+            dynamicUserId ?? string.Empty,
             eventId ?? string.Empty,
             payload,
             ct);
