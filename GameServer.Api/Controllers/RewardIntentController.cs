@@ -47,25 +47,6 @@ public sealed class RewardIntentController : ControllerBase
         };
     }
 
-    [HttpPost("callback")]
-    public async Task<ActionResult<ConfirmRewardIntentCallbackResponse>> ConfirmCallback([FromBody] ConfirmRewardIntentCallbackRequest request, CancellationToken ct)
-    {
-        var payload = request.Payload?.GetRawText();
-        var response = await _rewardIntentService.ConfirmIntentFromAdCallbackAsync(
-            request.Provider,
-            request.RewardIntentId,
-            request.ExternalEventId,
-            payload,
-            ct);
-
-        return response.ErrorCode switch
-        {
-            RewardIntentErrorCodes.ValidationError => BadRequest(response),
-            RewardIntentErrorCodes.IntentNotFound => NotFound(response),
-            _ => Ok(response)
-        };
-    }
-
     [HttpGet("callback")]
     public async Task<ActionResult<ConfirmRewardIntentCallbackGetResponse>> ConfirmCallbackGet(
         [FromQuery(Name = "rewardIntentId")] string? playerId,

@@ -98,7 +98,7 @@ public sealed class RewardIntentServiceTests
                 new GrantRewardResponse { Success = true, RewardId = "Gems" }
             ]);
 
-        var response = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_ok", "evt_1", "{}", CancellationToken.None);
+        var response = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_ok", "evt_1", "{}", CancellationToken.None);
 
         Assert.True(response.Success);
         Assert.Equal("fulfilled", response.Status);
@@ -128,8 +128,8 @@ public sealed class RewardIntentServiceTests
                 new GrantRewardResponse { Success = true, RewardId = "Gems" }
             ]);
 
-        var first = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_dup", "evt_1", "{}", CancellationToken.None);
-        var second = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_dup", "evt_1", "{}", CancellationToken.None);
+        var first = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_dup", "evt_1", "{}", CancellationToken.None);
+        var second = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_dup", "evt_1", "{}", CancellationToken.None);
 
         Assert.True(first.Success);
         Assert.False(second.Success);
@@ -167,8 +167,8 @@ public sealed class RewardIntentServiceTests
                 new GrantRewardResponse { Success = true, RewardId = "Gems" }
             ]);
 
-        var first = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_retry", "evt_7", "{}", CancellationToken.None);
-        var second = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_retry", "evt_7", "{}", CancellationToken.None);
+        var first = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_retry", "evt_7", "{}", CancellationToken.None);
+        var second = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_retry", "evt_7", "{}", CancellationToken.None);
 
         Assert.False(first.Success);
         Assert.Equal("failed", first.Status);
@@ -198,7 +198,7 @@ public sealed class RewardIntentServiceTests
             grantResponses: [],
             nowUtcMs: 2000);
 
-        var response = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_expired", "evt_8", "{}", CancellationToken.None);
+        var response = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_expired", "evt_8", "{}", CancellationToken.None);
 
         Assert.False(response.Success);
         Assert.Equal("expired", response.Status);
@@ -227,7 +227,7 @@ public sealed class RewardIntentServiceTests
             playerExists: true,
             grantResponses: []);
 
-        var response = await service.ConfirmIntentFromAdCallbackAsync("levelplay", "ri_fulfilled", "evt_9", "{}", CancellationToken.None);
+        var response = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_fulfilled", "evt_9", "{}", CancellationToken.None);
 
         Assert.False(response.Success);
         Assert.Equal(RewardIntentErrorCodes.IntentAlreadyFulfilled, response.ErrorCode);

@@ -149,24 +149,6 @@ public sealed class RewardIntentService : IRewardIntentService
         return ToStatusResponse(intent);
     }
 
-    public async Task<ConfirmRewardIntentCallbackResponse> ConfirmIntentFromAdCallbackAsync(
-        string provider,
-        string rewardIntentId,
-        string externalEventId,
-        string? callbackPayload,
-        CancellationToken ct = default)
-    {
-        var result = await ExecuteConfirmIntentFromAdCallbackAsync(
-            provider,
-            rewardIntentId,
-            externalEventId,
-            callbackPayload,
-            includeActionResult: false,
-            ct);
-
-        return result.Response;
-    }
-
     public async Task<ConfirmRewardIntentCallbackGetResponse> ConfirmIntentFromAdCallbackGetAsync(
         string provider,
         string rewardIntentId,

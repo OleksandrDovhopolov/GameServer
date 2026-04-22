@@ -87,13 +87,13 @@ public sealed class RewardApplicationServiceTests
             saveRepository,
             new Dictionary<string, RewardDefinition>(StringComparer.Ordinal)
             {
-                ["reward_cosmetic"] = new()
+                ["reward_unknown"] = new()
                 {
-                    RewardId = "reward_cosmetic",
+                    RewardId = "reward_unknown",
                     Source = "promo",
                     Parts =
                     {
-                        new RewardPart { Kind = RewardKind.Cosmetic, TargetId = "skin_1", Amount = 1 }
+                        new RewardPart { Kind = RewardKind.Unknown, TargetId = "unknown_part", Amount = 1 }
                     }
                 }
             });
@@ -102,7 +102,7 @@ public sealed class RewardApplicationServiceTests
         {
             PlayerId = "p1",
             RewardSource = "promo",
-            RewardId = "reward_cosmetic"
+            RewardId = "reward_unknown"
         });
 
         Assert.False(response.Success);

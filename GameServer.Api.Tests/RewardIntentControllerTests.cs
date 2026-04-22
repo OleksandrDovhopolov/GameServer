@@ -84,29 +84,11 @@ public sealed class RewardIntentControllerTests
     }
 
     [Fact]
-    public async Task Callback_WhenValidationError_ReturnsBadRequest()
-    {
-        var controller = CreateController(new StubService
-        {
-            CallbackResponse = new ConfirmRewardIntentCallbackResponse
-            {
-                Success = false,
-                Status = RewardIntentStatuses.Failed,
-                ErrorCode = RewardIntentErrorCodes.ValidationError
-            }
-        });
-
-        var result = await controller.ConfirmCallback(new ConfirmRewardIntentCallbackRequest(), CancellationToken.None);
-
-        Assert.IsType<BadRequestObjectResult>(result.Result);
-    }
-
-    [Fact]
     public async Task CallbackGet_MinimalContract_MapsQueryToServiceCall()
     {
         var stub = new StubService
         {
-            CallbackResponse = new ConfirmRewardIntentCallbackResponse
+            CallbackGetResponse = new ConfirmRewardIntentCallbackGetResponse
             {
                 Success = true,
                 Status = RewardIntentStatuses.Fulfilled
@@ -142,7 +124,7 @@ public sealed class RewardIntentControllerTests
     {
         var stub = new StubService
         {
-            CallbackResponse = new ConfirmRewardIntentCallbackResponse
+            CallbackGetResponse = new ConfirmRewardIntentCallbackGetResponse
             {
                 Success = true,
                 Status = RewardIntentStatuses.Fulfilled
@@ -231,7 +213,6 @@ public sealed class RewardIntentControllerTests
     {
         public CreateRewardIntentResponse CreateResponse { get; init; } = new() { Success = true, RewardIntentId = "ri_1" };
         public GetRewardIntentStatusResponse StatusResponse { get; init; } = new() { Status = RewardIntentStatuses.Pending };
-        public ConfirmRewardIntentCallbackResponse CallbackResponse { get; init; } = new() { Success = true, Status = RewardIntentStatuses.Fulfilled };
         public ConfirmRewardIntentCallbackGetResponse CallbackGetResponse { get; init; } = new() { Success = true, Status = RewardIntentStatuses.Fulfilled };
         public string? LastProvider { get; private set; }
         public string? LastRewardIntentId { get; private set; }
@@ -246,20 +227,6 @@ public sealed class RewardIntentControllerTests
         public Task<GetRewardIntentStatusResponse> GetIntentStatusAsync(string rewardIntentId, CancellationToken ct = default)
         {
             return Task.FromResult(StatusResponse);
-        }
-
-        public Task<ConfirmRewardIntentCallbackResponse> ConfirmIntentFromAdCallbackAsync(
-            string provider,
-            string rewardIntentId,
-            string externalEventId,
-            string? callbackPayload,
-            CancellationToken ct = default)
-        {
-            LastProvider = provider;
-            LastRewardIntentId = rewardIntentId;
-            LastExternalEventId = externalEventId;
-            LastPayload = callbackPayload;
-            return Task.FromResult(CallbackResponse);
         }
 
         public Task<ConfirmRewardIntentCallbackGetResponse> ConfirmIntentFromAdCallbackGetAsync(
