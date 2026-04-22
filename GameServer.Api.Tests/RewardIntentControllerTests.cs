@@ -126,7 +126,8 @@ public sealed class RewardIntentControllerTests
             null,
             CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result.Result);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.IsType<ConfirmRewardIntentCallbackGetResponse>(ok.Value);
         Assert.Equal("unknown", stub.LastProvider);
         Assert.Equal("ri_1", stub.LastRewardIntentId);
         Assert.Equal("evt_1", stub.LastExternalEventId);
@@ -161,11 +162,62 @@ public sealed class RewardIntentControllerTests
             "placement_1",
             CancellationToken.None);
 
-        Assert.IsType<OkObjectResult>(result.Result);
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.IsType<ConfirmRewardIntentCallbackGetResponse>(ok.Value);
         Assert.Equal("ironsource", stub.LastProvider);
         Assert.NotNull(stub.LastPayload);
         Assert.Contains("\"auctionId\":\"auc_1\"", stub.LastPayload!, StringComparison.Ordinal);
         Assert.Contains("\"placementName\":\"placement_1\"", stub.LastPayload!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CallbackGet_WhenFulfilled_ReturnsActionResult()
+    {
+        var controller = CreateController(new StubService
+        {
+            CallbackGetResponse = new ConfirmRewardIntentCallbackGetResponse
+            {
+                Success = true,
+                Status = RewardIntentStatuses.Fulfilled,
+                ActionResult = new RewardIntentActionResultDto
+                {
+                    RewardId = "reward_mixed",
+                    ResourceDelta = new Dictionary<string, int>(StringComparer.Ordinal)
+                    {
+                        ["Gems"] = 5
+                    },
+                    InventoryItems =
+                    [
+                        new GameServer.Api.Models.Dto.Rewards.InventoryItemDto
+                        {
+                            ItemId = "Ruby_Pack",
+                            Amount = 1
+                        }
+                    ],
+                    WheelSpinId = "ws_0123456789abcdef0123456789abcdef"
+                }
+            }
+        });
+
+        var result = await controller.ConfirmCallbackGet(
+            "player_3",
+            "evt_3",
+            "Gems",
+            "ri_3",
+            null,
+            "ironsource",
+            null,
+            null,
+            null,
+            CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var payload = Assert.IsType<ConfirmRewardIntentCallbackGetResponse>(ok.Value);
+        Assert.True(payload.Success);
+        Assert.NotNull(payload.ActionResult);
+        Assert.Equal("reward_mixed", payload.ActionResult!.RewardId);
+        Assert.Equal(5, payload.ActionResult.ResourceDelta["Gems"]);
+        Assert.Equal("ws_0123456789abcdef0123456789abcdef", payload.ActionResult.WheelSpinId);
     }
 
     private static RewardIntentController CreateController(IRewardIntentService service)
@@ -180,6 +232,7 @@ public sealed class RewardIntentControllerTests
         public CreateRewardIntentResponse CreateResponse { get; init; } = new() { Success = true, RewardIntentId = "ri_1" };
         public GetRewardIntentStatusResponse StatusResponse { get; init; } = new() { Status = RewardIntentStatuses.Pending };
         public ConfirmRewardIntentCallbackResponse CallbackResponse { get; init; } = new() { Success = true, Status = RewardIntentStatuses.Fulfilled };
+        public ConfirmRewardIntentCallbackGetResponse CallbackGetResponse { get; init; } = new() { Success = true, Status = RewardIntentStatuses.Fulfilled };
         public string? LastProvider { get; private set; }
         public string? LastRewardIntentId { get; private set; }
         public string? LastExternalEventId { get; private set; }
@@ -207,6 +260,20 @@ public sealed class RewardIntentControllerTests
             LastExternalEventId = externalEventId;
             LastPayload = callbackPayload;
             return Task.FromResult(CallbackResponse);
+        }
+
+        public Task<ConfirmRewardIntentCallbackGetResponse> ConfirmIntentFromAdCallbackGetAsync(
+            string provider,
+            string rewardIntentId,
+            string externalEventId,
+            string? callbackPayload,
+            CancellationToken ct = default)
+        {
+            LastProvider = provider;
+            LastRewardIntentId = rewardIntentId;
+            LastExternalEventId = externalEventId;
+            LastPayload = callbackPayload;
+            return Task.FromResult(CallbackGetResponse);
         }
     }
 }

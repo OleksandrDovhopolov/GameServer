@@ -64,6 +64,7 @@ builder.Services.AddSingleton<IRewardDefinitionRepository, RewardDefinitionRepos
 builder.Services.AddScoped<IRewardPartApplier, RewardPartApplier>();
 builder.Services.AddScoped<IRewardHandler, ResourceRewardHandler>();
 builder.Services.AddScoped<IRewardHandler, InventoryRewardHandler>();
+builder.Services.AddScoped<IRewardHandler, FreeSpinRewardHandler>();
 builder.Services.AddScoped<IRewardApplicationService, RewardApplicationService>();
 builder.Services.AddScoped<IPlayerEconomyRepository, RedisPlayerEconomyRepository>();
 builder.Services.AddScoped<IRewardIntentRepository, RedisRewardIntentRepository>();

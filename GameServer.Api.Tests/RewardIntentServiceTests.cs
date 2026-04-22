@@ -233,17 +233,199 @@ public sealed class RewardIntentServiceTests
         Assert.Equal(RewardIntentErrorCodes.IntentAlreadyFulfilled, response.ErrorCode);
     }
 
+    [Fact]
+    public async Task CallbackGet_WhenResourceRewardFulfilled_ReturnsResourceDelta()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_get_resource",
+            PlayerId = "player_1",
+            RewardId = "reward_resource",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1_000_000
+        });
+
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["reward_resource"],
+            playerExists: true,
+            grantResponses:
+            [
+                new GrantRewardResponse { Success = true, RewardId = "reward_resource" }
+            ],
+            rewardDefinitions: new Dictionary<string, RewardDefinition>(StringComparer.Ordinal)
+            {
+                ["reward_resource"] = new()
+                {
+                    RewardId = "reward_resource",
+                    Source = "grant",
+                    Parts = [new RewardPart { Kind = RewardKind.Resource, TargetId = "Gold", Amount = 25 }]
+                }
+            });
+
+        var response = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_get_resource", "evt_100", "{}", CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.Equal(RewardIntentStatuses.Fulfilled, response.Status);
+        Assert.NotNull(response.ActionResult);
+        Assert.Equal("reward_resource", response.ActionResult!.RewardId);
+        Assert.Equal(25, response.ActionResult.ResourceDelta["Gold"]);
+        Assert.Empty(response.ActionResult.InventoryItems);
+        Assert.Null(response.ActionResult.WheelSpinId);
+    }
+
+    [Fact]
+    public async Task CallbackGet_WhenInventoryRewardFulfilled_ReturnsInventoryItems()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_get_inventory",
+            PlayerId = "player_1",
+            RewardId = "reward_inventory",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1_000_000
+        });
+
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["reward_inventory"],
+            playerExists: true,
+            grantResponses:
+            [
+                new GrantRewardResponse { Success = true, RewardId = "reward_inventory" }
+            ],
+            rewardDefinitions: new Dictionary<string, RewardDefinition>(StringComparer.Ordinal)
+            {
+                ["reward_inventory"] = new()
+                {
+                    RewardId = "reward_inventory",
+                    Source = "grant",
+                    Parts = [new RewardPart { Kind = RewardKind.InventoryItem, TargetId = "Emerald_Pack", Amount = 2 }]
+                }
+            });
+
+        var response = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_get_inventory", "evt_101", "{}", CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.ActionResult);
+        var item = Assert.Single(response.ActionResult!.InventoryItems);
+        Assert.Equal("Emerald_Pack", item.ItemId);
+        Assert.Equal(2, item.Amount);
+        Assert.Empty(response.ActionResult.ResourceDelta);
+        Assert.Null(response.ActionResult.WheelSpinId);
+    }
+
+    [Fact]
+    public async Task CallbackGet_WhenFreeSpinRewardFulfilled_ReturnsWheelSpinId()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_get_spin",
+            PlayerId = "player_1",
+            RewardId = "reward_free_spin",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1_000_000
+        });
+
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["reward_free_spin"],
+            playerExists: true,
+            grantResponses:
+            [
+                new GrantRewardResponse { Success = true, RewardId = "reward_free_spin" }
+            ],
+            rewardDefinitions: new Dictionary<string, RewardDefinition>(StringComparer.Ordinal)
+            {
+                ["reward_free_spin"] = new()
+                {
+                    RewardId = "reward_free_spin",
+                    Source = "grant",
+                    Parts = [new RewardPart { Kind = RewardKind.FreeSpin, TargetId = "FortuneWheel", Amount = 1 }]
+                }
+            });
+
+        var response = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_get_spin", "evt_102", "{}", CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.ActionResult);
+        Assert.NotNull(response.ActionResult!.WheelSpinId);
+        Assert.StartsWith("ws_", response.ActionResult.WheelSpinId, StringComparison.Ordinal);
+        Assert.Equal(35, response.ActionResult.WheelSpinId!.Length);
+        Assert.Empty(response.ActionResult.ResourceDelta);
+        Assert.Empty(response.ActionResult.InventoryItems);
+    }
+
+    [Fact]
+    public async Task CallbackGet_WhenMixedRewardFulfilled_ReturnsAllActionSections()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_get_mixed",
+            PlayerId = "player_1",
+            RewardId = "reward_mixed",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1_000_000
+        });
+
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["reward_mixed"],
+            playerExists: true,
+            grantResponses:
+            [
+                new GrantRewardResponse { Success = true, RewardId = "reward_mixed" }
+            ],
+            rewardDefinitions: new Dictionary<string, RewardDefinition>(StringComparer.Ordinal)
+            {
+                ["reward_mixed"] = new()
+                {
+                    RewardId = "reward_mixed",
+                    Source = "grant",
+                    Parts =
+                    [
+                        new RewardPart { Kind = RewardKind.Resource, TargetId = "Gems", Amount = 3 },
+                        new RewardPart { Kind = RewardKind.InventoryItem, TargetId = "Ruby_Pack", Amount = 1 },
+                        new RewardPart { Kind = RewardKind.FreeSpin, TargetId = "FortuneWheel", Amount = 1 }
+                    ]
+                }
+            });
+
+        var response = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_get_mixed", "evt_103", "{}", CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.NotNull(response.ActionResult);
+        Assert.Equal(3, response.ActionResult!.ResourceDelta["Gems"]);
+        var item = Assert.Single(response.ActionResult.InventoryItems);
+        Assert.Equal("Ruby_Pack", item.ItemId);
+        Assert.Equal(1, item.Amount);
+        Assert.StartsWith("ws_", response.ActionResult.WheelSpinId, StringComparison.Ordinal);
+    }
+
     private static RewardIntentService CreateService(
         InMemoryRewardIntentRepository repository,
         IReadOnlyCollection<string> supportedRewardIds,
         bool playerExists,
         IReadOnlyList<GrantRewardResponse> grantResponses,
-        long nowUtcMs = 5_000)
+        long nowUtcMs = 5_000,
+        IReadOnlyDictionary<string, RewardDefinition>? rewardDefinitions = null)
     {
         return new RewardIntentService(
             repository,
             new FakePlayerEconomyRepository(playerExists),
-            new FakeRewardDefinitionRepository(supportedRewardIds),
+            new FakeRewardDefinitionRepository(supportedRewardIds, rewardDefinitions),
             new QueueRewardApplicationService(grantResponses),
             new FakeClock(nowUtcMs),
             NullLogger<RewardIntentService>.Instance);
@@ -277,14 +459,23 @@ public sealed class RewardIntentServiceTests
     private sealed class FakeRewardDefinitionRepository : IRewardDefinitionRepository
     {
         private readonly HashSet<string> _supportedRewardIds;
+        private readonly IReadOnlyDictionary<string, RewardDefinition> _definitions;
 
-        public FakeRewardDefinitionRepository(IReadOnlyCollection<string> supportedRewardIds)
+        public FakeRewardDefinitionRepository(
+            IReadOnlyCollection<string> supportedRewardIds,
+            IReadOnlyDictionary<string, RewardDefinition>? definitions)
         {
             _supportedRewardIds = new HashSet<string>(supportedRewardIds, StringComparer.Ordinal);
+            _definitions = definitions ?? new Dictionary<string, RewardDefinition>(StringComparer.Ordinal);
         }
 
         public Task<RewardDefinition?> GetByIdAsync(string rewardId, CancellationToken ct)
         {
+            if (_definitions.TryGetValue(rewardId, out var definition))
+            {
+                return Task.FromResult<RewardDefinition?>(definition);
+            }
+
             if (_supportedRewardIds.Contains(rewardId))
             {
                 return Task.FromResult<RewardDefinition?>(new RewardDefinition

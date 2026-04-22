@@ -6,7 +6,15 @@ public interface IRewardIntentService
 {
     Task<CreateRewardIntentResponse> CreateIntentAsync(string playerId, string rewardId, CancellationToken ct = default);
     Task<GetRewardIntentStatusResponse> GetIntentStatusAsync(string rewardIntentId, CancellationToken ct = default);
+    
     Task<ConfirmRewardIntentCallbackResponse> ConfirmIntentFromAdCallbackAsync(
+        string provider,
+        string rewardIntentId,
+        string externalEventId,
+        string? callbackPayload,
+        CancellationToken ct = default);
+    
+    Task<ConfirmRewardIntentCallbackGetResponse> ConfirmIntentFromAdCallbackGetAsync(
         string provider,
         string rewardIntentId,
         string externalEventId,

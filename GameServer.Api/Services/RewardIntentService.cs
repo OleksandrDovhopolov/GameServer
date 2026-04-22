@@ -1,4 +1,5 @@
 using GameServer.Api.Models.Domain.RewardIntents;
+using GameServer.Api.Models.Domain.Rewards;
 using GameServer.Api.Models.Dto.RewardIntents;
 using GameServer.Api.Models.Dto.Rewards;
 using GameServer.Api.Repositories.Interfaces;
@@ -155,17 +156,59 @@ public sealed class RewardIntentService : IRewardIntentService
         string? callbackPayload,
         CancellationToken ct = default)
     {
+        var result = await ExecuteConfirmIntentFromAdCallbackAsync(
+            provider,
+            rewardIntentId,
+            externalEventId,
+            callbackPayload,
+            includeActionResult: false,
+            ct);
+
+        return result.Response;
+    }
+
+    public async Task<ConfirmRewardIntentCallbackGetResponse> ConfirmIntentFromAdCallbackGetAsync(
+        string provider,
+        string rewardIntentId,
+        string externalEventId,
+        string? callbackPayload,
+        CancellationToken ct = default)
+    {
+        var result = await ExecuteConfirmIntentFromAdCallbackAsync(
+            provider,
+            rewardIntentId,
+            externalEventId,
+            callbackPayload,
+            includeActionResult: true,
+            ct);
+
+        return new ConfirmRewardIntentCallbackGetResponse
+        {
+            Success = result.Response.Success,
+            Status = result.Response.Status,
+            ErrorCode = result.Response.ErrorCode,
+            ErrorMessage = result.Response.ErrorMessage,
+            ActionResult = result.ActionResult
+        };
+    }
+
+    private async Task<CallbackExecutionResult> ExecuteConfirmIntentFromAdCallbackAsync(
+        string provider,
+        string rewardIntentId,
+        string externalEventId,
+        string? callbackPayload,
+        bool includeActionResult,
+        CancellationToken ct)
+    {
         if (string.IsNullOrWhiteSpace(provider) ||
             string.IsNullOrWhiteSpace(rewardIntentId) ||
             string.IsNullOrWhiteSpace(externalEventId))
         {
-            return new ConfirmRewardIntentCallbackResponse
-            {
-                Success = false,
-                Status = RewardIntentStatuses.Failed,
-                ErrorCode = RewardIntentErrorCodes.ValidationError,
-                ErrorMessage = "provider, rewardIntentId and externalEventId are required."
-            };
+            return BuildCallbackResult(
+                success: false,
+                status: RewardIntentStatuses.Failed,
+                errorCode: RewardIntentErrorCodes.ValidationError,
+                errorMessage: "provider, rewardIntentId and externalEventId are required.");
         }
 
         _logger.LogInformation(
@@ -187,13 +230,11 @@ public sealed class RewardIntentService : IRewardIntentService
         if (!string.Equals(beginResult.ResultCode, "CLAIMED", StringComparison.Ordinal))
         {
             LogBeginFailure(provider, rewardIntentId, externalEventId, beginResult);
-            return new ConfirmRewardIntentCallbackResponse
-            {
-                Success = false,
-                Status = NormalizeStatus(beginResult.Status),
-                ErrorCode = beginResult.ResultCode,
-                ErrorMessage = beginResult.ErrorMessage
-            };
+            return BuildCallbackResult(
+                success: false,
+                status: NormalizeStatus(beginResult.Status),
+                errorCode: beginResult.ResultCode,
+                errorMessage: beginResult.ErrorMessage);
         }
 
         if (string.IsNullOrWhiteSpace(beginResult.PlayerId) || string.IsNullOrWhiteSpace(beginResult.RewardId))
@@ -209,13 +250,11 @@ public sealed class RewardIntentService : IRewardIntentService
                 _clock.UtcNowUnixMilliseconds,
                 ct);
 
-            return new ConfirmRewardIntentCallbackResponse
-            {
-                Success = false,
-                Status = RewardIntentStatuses.Failed,
-                ErrorCode = RewardIntentErrorCodes.RewardGrantFailed,
-                ErrorMessage = "Claimed callback is missing playerId/rewardId."
-            };
+            return BuildCallbackResult(
+                success: false,
+                status: RewardIntentStatuses.Failed,
+                errorCode: RewardIntentErrorCodes.RewardGrantFailed,
+                errorMessage: "Claimed callback is missing playerId/rewardId.");
         }
 
         var grantResponse = await _rewardApplicationService.GrantAsync(
@@ -247,13 +286,11 @@ public sealed class RewardIntentService : IRewardIntentService
                 rewardIntentId,
                 provider,
                 externalEventId);
-            return new ConfirmRewardIntentCallbackResponse
-            {
-                Success = false,
-                Status = RewardIntentStatuses.Failed,
-                ErrorCode = RewardIntentErrorCodes.RewardGrantFailed,
-                ErrorMessage = "Reward callback finalization failed."
-            };
+            return BuildCallbackResult(
+                success: false,
+                status: RewardIntentStatuses.Failed,
+                errorCode: RewardIntentErrorCodes.RewardGrantFailed,
+                errorMessage: "Reward callback finalization failed.");
         }
 
         if (string.Equals(finalStatus, RewardIntentStatuses.Fulfilled, StringComparison.Ordinal))
@@ -264,22 +301,36 @@ public sealed class RewardIntentService : IRewardIntentService
                 provider,
                 externalEventId,
                 beginResult.RewardId);
-            return new ConfirmRewardIntentCallbackResponse
+
+            RewardIntentActionResultDto? actionResult = null;
+            if (includeActionResult)
             {
-                Success = true,
-                Status = RewardIntentStatuses.Fulfilled,
-                ErrorCode = null,
-                ErrorMessage = null
-            };
+                var rewardDefinition = await _rewardDefinitionRepository.GetByIdAsync(beginResult.RewardId, ct);
+                if (rewardDefinition is null)
+                {
+                    _logger.LogWarning(
+                        "Reward definition was not found while building callback action result. RewardId: {RewardId}",
+                        beginResult.RewardId);
+                }
+                else
+                {
+                    actionResult = BuildActionResult(beginResult.RewardId, rewardDefinition);
+                }
+            }
+
+            return BuildCallbackResult(
+                success: true,
+                status: RewardIntentStatuses.Fulfilled,
+                errorCode: null,
+                errorMessage: null,
+                actionResult: actionResult);
         }
 
-        return new ConfirmRewardIntentCallbackResponse
-        {
-            Success = false,
-            Status = finalStatus,
-            ErrorCode = finalErrorCode,
-            ErrorMessage = finalErrorMessage
-        };
+        return BuildCallbackResult(
+            success: false,
+            status: finalStatus,
+            errorCode: finalErrorCode,
+            errorMessage: finalErrorMessage);
     }
 
     private static CreateRewardIntentResponse BuildCreateFailure(string errorCode, string errorMessage)
@@ -290,6 +341,66 @@ public sealed class RewardIntentService : IRewardIntentService
             RewardIntentId = null,
             ErrorCode = errorCode,
             ErrorMessage = errorMessage
+        };
+    }
+
+    private static CallbackExecutionResult BuildCallbackResult(
+        bool success,
+        string status,
+        string? errorCode,
+        string? errorMessage,
+        RewardIntentActionResultDto? actionResult = null)
+    {
+        return new CallbackExecutionResult
+        {
+            Response = new ConfirmRewardIntentCallbackResponse
+            {
+                Success = success,
+                Status = status,
+                ErrorCode = errorCode,
+                ErrorMessage = errorMessage
+            },
+            ActionResult = actionResult
+        };
+    }
+
+    private static RewardIntentActionResultDto BuildActionResult(string rewardId, RewardDefinition rewardDefinition)
+    {
+        var resourceDelta = new Dictionary<string, int>(StringComparer.Ordinal);
+        var inventoryDelta = new Dictionary<string, int>(StringComparer.Ordinal);
+        string? wheelSpinId = null;
+
+        foreach (var part in rewardDefinition.Parts)
+        {
+            if (part.Kind == RewardKind.Resource)
+            {
+                resourceDelta.TryGetValue(part.TargetId, out var currentValue);
+                resourceDelta[part.TargetId] = checked(currentValue + part.Amount);
+                continue;
+            }
+
+            if (part.Kind == RewardKind.InventoryItem)
+            {
+                inventoryDelta.TryGetValue(part.TargetId, out var currentValue);
+                inventoryDelta[part.TargetId] = checked(currentValue + part.Amount);
+                continue;
+            }
+
+            if (part.Kind == RewardKind.FreeSpin)
+            {
+                wheelSpinId ??= $"ws_{Guid.NewGuid():N}";
+            }
+        }
+
+        return new RewardIntentActionResultDto
+        {
+            RewardId = rewardId,
+            ResourceDelta = resourceDelta,
+            InventoryItems = inventoryDelta
+                .OrderBy(x => x.Key, StringComparer.Ordinal)
+                .Select(x => new InventoryItemDto { ItemId = x.Key, Amount = x.Value })
+                .ToList(),
+            WheelSpinId = wheelSpinId
         };
     }
 
@@ -377,5 +488,11 @@ public sealed class RewardIntentService : IRewardIntentService
             RewardIntentStatuses.Expired => RewardIntentStatuses.Expired,
             _ => RewardIntentStatuses.Failed
         };
+    }
+
+    private sealed class CallbackExecutionResult
+    {
+        public required ConfirmRewardIntentCallbackResponse Response { get; init; }
+        public RewardIntentActionResultDto? ActionResult { get; init; }
     }
 }

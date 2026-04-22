@@ -67,7 +67,7 @@ public sealed class RewardIntentController : ControllerBase
     }
 
     [HttpGet("callback")]
-    public async Task<ActionResult<ConfirmRewardIntentCallbackResponse>> ConfirmCallbackGet(
+    public async Task<ActionResult<ConfirmRewardIntentCallbackGetResponse>> ConfirmCallbackGet(
         [FromQuery(Name = "rewardIntentId")] string? playerId,
         [FromQuery(Name = "eventId")] string? eventId,
         [FromQuery] string? rewards,
@@ -92,7 +92,7 @@ public sealed class RewardIntentController : ControllerBase
             ["placementName"] = placementName
         });
 
-        var response = await _rewardIntentService.ConfirmIntentFromAdCallbackAsync(
+        var response = await _rewardIntentService.ConfirmIntentFromAdCallbackGetAsync(
             provider,
             dynamicUserId ?? string.Empty,
             eventId ?? string.Empty,

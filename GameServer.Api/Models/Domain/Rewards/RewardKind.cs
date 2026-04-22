@@ -8,5 +8,6 @@ public enum RewardKind
     Avatar = 3,
     Cosmetic = 4,
     Booster = 5,
-    FeatureUnlock = 6
+    FeatureUnlock = 6,
+    FreeSpin = 7
 }

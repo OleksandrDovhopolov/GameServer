@@ -111,7 +111,13 @@ public sealed class RewardDefinitionRepository : IRewardDefinitionRepository
                 throw new InvalidOperationException($"Reward definition '{definition.RewardId}' contains empty reward target id.");
             }
 
-            if (part.Amount <= 0)
+            if (part.Kind == RewardKind.FreeSpin && part.Amount != 1)
+            {
+                throw new InvalidOperationException(
+                    $"Reward definition '{definition.RewardId}' free spin part must have amount equal to one.");
+            }
+
+            if (part.Kind != RewardKind.FreeSpin && part.Amount <= 0)
             {
                 throw new InvalidOperationException($"Reward definition '{definition.RewardId}' contains non-positive reward amount.");
             }

@@ -142,6 +142,37 @@ public sealed class RewardApplicationServiceTests
         Assert.Contains(response.PlayerState.InventoryItems, x => x.ItemId == "bomb" && x.Amount == 3);
     }
 
+    [Fact]
+    public async Task GrantAsync_WhenDefinitionContainsFreeSpin_DoesNotFailWithUnsupportedRewardKind()
+    {
+        var saveRepository = new InMemorySaveRepository();
+        saveRepository.Seed("p1", "{}");
+        var service = CreateService(
+            saveRepository,
+            new Dictionary<string, RewardDefinition>(StringComparer.Ordinal)
+            {
+                ["free_spin_reward"] = new()
+                {
+                    RewardId = "free_spin_reward",
+                    Source = "promo",
+                    Parts =
+                    {
+                        new RewardPart { Kind = RewardKind.FreeSpin, TargetId = "FortuneWheel", Amount = 1 }
+                    }
+                }
+            });
+
+        var response = await service.GrantAsync(new GrantRewardCommand
+        {
+            PlayerId = "p1",
+            RewardSource = "promo",
+            RewardId = "free_spin_reward"
+        });
+
+        Assert.True(response.Success);
+        Assert.Null(response.ErrorCode);
+    }
+
     private static RewardApplicationService CreateService(
         InMemorySaveRepository saveRepository,
         Dictionary<string, RewardDefinition> definitions)
@@ -149,7 +180,8 @@ public sealed class RewardApplicationServiceTests
         var handlers = new IRewardHandler[]
         {
             new ResourceRewardHandler(),
-            new InventoryRewardHandler()
+            new InventoryRewardHandler(),
+            new FreeSpinRewardHandler()
         };
 
         return new RewardApplicationService(
