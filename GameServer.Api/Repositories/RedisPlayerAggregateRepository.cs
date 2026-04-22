@@ -185,7 +185,7 @@ public sealed class RedisPlayerAggregateRepository : IPlayerAggregateRepository
         return long.TryParse(rawValue, NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : fallback;
     }
 
-    private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}";
+    private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}:{playerId}";
     private static RedisKey GetMetaKey(string playerId) => $"save:{playerId}:meta";
     private static RedisKey GetResourcesKey(string playerId) => $"save:{playerId}:resources";
     private static RedisKey GetResourcesVersionKey(string playerId) => $"save:{playerId}:resources:version";

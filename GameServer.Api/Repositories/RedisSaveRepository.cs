@@ -87,7 +87,7 @@ public sealed class RedisSaveRepository : ISaveRepository
         return _database.KeyExistsAsync(GetSaveKey(playerId)).WaitAsync(cancellationToken);
     }
 
-    private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}";
+    private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}:{playerId}";
     private static RedisKey GetMetaKey(string playerId) => $"save:{playerId}:meta";
     private static RedisKey GetResourcesKey(string playerId) => $"save:{playerId}:resources";
     private static RedisKey GetResourcesVersionKey(string playerId) => $"save:{playerId}:resources:version";
