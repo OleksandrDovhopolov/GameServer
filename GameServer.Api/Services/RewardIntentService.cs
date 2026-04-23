@@ -10,9 +10,13 @@ namespace GameServer.Api.Services;
 public sealed class RewardIntentService : IRewardIntentService
 {
     private static readonly TimeSpan IntentTtl = TimeSpan.FromMinutes(30);
+    private const string AdSpinRewardId = "fortune_wheel_ad_spin";
+    private const string FortuneWheelPropertyName = "FortuneWheel";
+    private const string AdSpinAvailablePropertyName = "AdSpinAvailable";
 
     private readonly IRewardIntentRepository _rewardIntentRepository;
     private readonly IPlayerEconomyRepository _playerEconomyRepository;
+    private readonly IPlayerAggregateRepository _playerAggregateRepository;
     private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
     private readonly IRewardApplicationService _rewardApplicationService;
     private readonly ISystemClock _clock;
@@ -21,6 +25,7 @@ public sealed class RewardIntentService : IRewardIntentService
     public RewardIntentService(
         IRewardIntentRepository rewardIntentRepository,
         IPlayerEconomyRepository playerEconomyRepository,
+        IPlayerAggregateRepository playerAggregateRepository,
         IRewardDefinitionRepository rewardDefinitionRepository,
         IRewardApplicationService rewardApplicationService,
         ISystemClock clock,
@@ -28,6 +33,7 @@ public sealed class RewardIntentService : IRewardIntentService
     {
         _rewardIntentRepository = rewardIntentRepository;
         _playerEconomyRepository = playerEconomyRepository;
+        _playerAggregateRepository = playerAggregateRepository;
         _rewardDefinitionRepository = rewardDefinitionRepository;
         _rewardApplicationService = rewardApplicationService;
         _clock = clock;
@@ -239,16 +245,10 @@ public sealed class RewardIntentService : IRewardIntentService
                 errorMessage: "Claimed callback is missing playerId/rewardId.");
         }
 
-        var grantResponse = await _rewardApplicationService.GrantAsync(
-            new GrantRewardCommand
-            {
-                PlayerId = beginResult.PlayerId,
-                RewardId = beginResult.RewardId,
-                RewardSource = "reward_intent_callback"
-            },
-            ct);
-
-        var (finalStatus, finalErrorCode, finalErrorMessage) = MapGrantResult(grantResponse);
+        var (finalStatus, finalErrorCode, finalErrorMessage) =
+            IsAdSpinReward(beginResult.RewardId)
+                ? await ActivateAdSpinAsync(beginResult.PlayerId, beginResult.RewardId, ct)
+                : await GrantStandardRewardAsync(beginResult.PlayerId, beginResult.RewardId, ct);
 
         var finalized = await _rewardIntentRepository.FinalizeCallbackProcessingAsync(
             provider,
@@ -277,15 +277,27 @@ public sealed class RewardIntentService : IRewardIntentService
 
         if (string.Equals(finalStatus, RewardIntentStatuses.Fulfilled, StringComparison.Ordinal))
         {
-            _logger.LogInformation(
-                "Reward granted from callback through standard grant flow. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}, RewardId: {RewardId}",
-                rewardIntentId,
-                provider,
-                externalEventId,
-                beginResult.RewardId);
+            if (IsAdSpinReward(beginResult.RewardId))
+            {
+                _logger.LogInformation(
+                    "Ad spin reward callback fulfilled. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}, RewardId: {RewardId}",
+                    rewardIntentId,
+                    provider,
+                    externalEventId,
+                    beginResult.RewardId);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Reward granted from callback through standard grant flow. RewardIntentId: {RewardIntentId}, Provider: {Provider}, ExternalEventId: {ExternalEventId}, RewardId: {RewardId}",
+                    rewardIntentId,
+                    provider,
+                    externalEventId,
+                    beginResult.RewardId);
+            }
 
             RewardIntentActionResultDto? actionResult = null;
-            if (includeActionResult)
+            if (includeActionResult && !IsAdSpinReward(beginResult.RewardId))
             {
                 var rewardDefinition = await _rewardDefinitionRepository.GetByIdAsync(beginResult.RewardId, ct);
                 if (rewardDefinition is null)
@@ -313,6 +325,63 @@ public sealed class RewardIntentService : IRewardIntentService
             status: finalStatus,
             errorCode: finalErrorCode,
             errorMessage: finalErrorMessage);
+    }
+
+    private async Task<(string FinalStatus, string ErrorCode, string ErrorMessage)> GrantStandardRewardAsync(
+        string playerId,
+        string rewardId,
+        CancellationToken ct)
+    {
+        var grantResponse = await _rewardApplicationService.GrantAsync(
+            new GrantRewardCommand
+            {
+                PlayerId = playerId,
+                RewardId = rewardId,
+                RewardSource = "reward_intent_callback"
+            },
+            ct);
+
+        return MapGrantResult(grantResponse);
+    }
+
+    private async Task<(string FinalStatus, string ErrorCode, string ErrorMessage)> ActivateAdSpinAsync(
+        string playerId,
+        string rewardId,
+        CancellationToken ct)
+    {
+        try
+        {
+            var player = await _playerAggregateRepository.LoadAsync(playerId, ct);
+            var root = player.RootDocument;
+            if (!root.TryGetPropertyValue(FortuneWheelPropertyName, out var wheelNode) || wheelNode is not System.Text.Json.Nodes.JsonObject wheelObject)
+            {
+                wheelObject = [];
+                root[FortuneWheelPropertyName] = wheelObject;
+            }
+
+            wheelObject[AdSpinAvailablePropertyName] = true;
+            await _playerAggregateRepository.SaveAsync(player, ct);
+
+            _logger.LogInformation(
+                "Ad spin reward activated. PlayerId: {PlayerId}, RewardId: {RewardId}",
+                playerId,
+                rewardId);
+
+            return (RewardIntentStatuses.Fulfilled, string.Empty, string.Empty);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Ad spin reward activation failed. PlayerId: {PlayerId}, RewardId: {RewardId}",
+                playerId,
+                rewardId);
+
+            return (
+                RewardIntentStatuses.Failed,
+                RewardIntentErrorCodes.RewardGrantFailed,
+                "Ad spin activation failed.");
+        }
     }
 
     private static CreateRewardIntentResponse BuildCreateFailure(string errorCode, string errorMessage)
@@ -470,6 +539,11 @@ public sealed class RewardIntentService : IRewardIntentService
             RewardIntentStatuses.Expired => RewardIntentStatuses.Expired,
             _ => RewardIntentStatuses.Failed
         };
+    }
+
+    private static bool IsAdSpinReward(string rewardId)
+    {
+        return string.Equals(rewardId, AdSpinRewardId, StringComparison.Ordinal);
     }
 
     private sealed class CallbackExecutionResult

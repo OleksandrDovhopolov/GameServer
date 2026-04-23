@@ -15,8 +15,10 @@ public sealed class WheelService : IWheelService
     private const string FortuneWheelPropertyName = "FortuneWheel";
     private const string AvailableSpinsPropertyName = "AvailableSpins";
     private const string UpdatedAtPropertyName = "UpdatedAt";
+    private const string AdSpinAvailablePropertyName = "AdSpinAvailable";
     private static readonly TimeSpan RegenInterval = TimeSpan.FromMinutes(2);
     private static readonly long RegenIntervalMs = (long)RegenInterval.TotalMilliseconds;
+    private static readonly TimeSpan SpinLockTtl = TimeSpan.FromSeconds(5);
 
     private readonly ISystemClock _clock;
     private readonly ILogger<WheelService> _logger;
@@ -24,6 +26,7 @@ public sealed class WheelService : IWheelService
     private readonly IRewardPartApplier _rewardPartApplier;
     private readonly IPlayerAggregateRepository _playerAggregateRepository;
     private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
+    private readonly IDistributedLockService _distributedLockService;
 
     public WheelService(
         IPlayerAggregateRepository playerAggregateRepository,
@@ -31,6 +34,7 @@ public sealed class WheelService : IWheelService
         ISystemClock clock,
         IRewardDefinitionRepository rewardDefinitionRepository,
         IRewardPartApplier rewardPartApplier,
+        IDistributedLockService distributedLockService,
         ILogger<WheelService> logger)
     {
         _clock = clock;
@@ -39,6 +43,7 @@ public sealed class WheelService : IWheelService
         _rewardPartApplier = rewardPartApplier;
         _playerAggregateRepository = playerAggregateRepository;
         _rewardDefinitionRepository = rewardDefinitionRepository;
+        _distributedLockService = distributedLockService;
     }
 
     public IReadOnlyList<WheelReward> GetRewards() => _rewardCatalog.GetRewards();
@@ -64,7 +69,8 @@ public sealed class WheelService : IWheelService
             {
                 AvailableSpins = MaxAvailableSpins,
                 UpdatedAt = now,
-                NextUpdateAt = now + RegenIntervalMs
+                NextUpdateAt = now + RegenIntervalMs,
+                AdSpinAvailable = false
             };
             stateChanged = true;
         }
@@ -82,13 +88,18 @@ public sealed class WheelService : IWheelService
         {
             AvailableSpins = state.AvailableSpins,
             UpdatedAt = state.UpdatedAt,
-            NextUpdateAt = state.NextUpdateAt
+            NextUpdateAt = state.NextUpdateAt,
+            AdSpinAvailable = state.AdSpinAvailable
         };
     }
 
     public async Task<WheelSpinResult> SpinAsync(string playerId, CancellationToken cancellationToken)
     {
         ValidatePlayerId(playerId);
+        await using var spinLock = await _distributedLockService.AcquireAsync(
+            $"wheel:spin:lock:{playerId}",
+            SpinLockTtl,
+            cancellationToken);
 
         var now = _clock.UtcNowUnixMilliseconds;
         var player = await _playerAggregateRepository.LoadAsync(playerId, cancellationToken);
@@ -96,7 +107,7 @@ public sealed class WheelService : IWheelService
         var state = ReadState(root, now, out _, out _);
         _ = ApplyRegenIfNeeded(state, now);
 
-        if (state.AvailableSpins <= 0)
+        if (state is { AvailableSpins: <= 0, AdSpinAvailable: false })
         {
             SetState(root, state);
             await _playerAggregateRepository.SaveAsync(player, cancellationToken);
@@ -104,7 +115,15 @@ public sealed class WheelService : IWheelService
         }
 
         var rewardId = _rewardCatalog.RollRewardId();
-        state.AvailableSpins -= 1;
+        if (state.AvailableSpins > 0)
+        {
+            state.AvailableSpins -= 1;
+        }
+        else
+        {
+            state.AdSpinAvailable = false;
+        }
+
         state.NextUpdateAt = CalculateNextUpdateTimestamp(state.UpdatedAt);
 
         var rewardDefinition = await _rewardDefinitionRepository.GetByIdAsync(rewardId, cancellationToken);
@@ -137,6 +156,7 @@ public sealed class WheelService : IWheelService
             AvailableSpins = state.AvailableSpins,
             UpdatedAt = state.UpdatedAt,
             NextUpdateAt = state.NextUpdateAt,
+            AdSpinAvailable = state.AdSpinAvailable,
             RewardGrant = rewardGrantResponse
         };
     }
@@ -157,7 +177,8 @@ public sealed class WheelService : IWheelService
         {
             AvailableSpins = MaxAvailableSpins,
             UpdatedAt = now,
-            NextUpdateAt = now + RegenIntervalMs
+            NextUpdateAt = now + RegenIntervalMs,
+            AdSpinAvailable = false
         };
     }
 
@@ -177,6 +198,7 @@ public sealed class WheelService : IWheelService
 
         var availableSpins = TryGetInt(fortuneWheel, AvailableSpinsPropertyName);
         var rawUpdatedAt = TryGetLong(fortuneWheel, UpdatedAtPropertyName);
+        var adSpinAvailable = TryGetBool(fortuneWheel, AdSpinAvailablePropertyName) ?? false;
         if (availableSpins is null || availableSpins < 0 || availableSpins > MaxAvailableSpins)
         {
             state = default!;
@@ -190,7 +212,8 @@ public sealed class WheelService : IWheelService
             {
                 AvailableSpins = availableSpins.Value,
                 UpdatedAt = now,
-                NextUpdateAt = now + RegenIntervalMs
+                NextUpdateAt = now + RegenIntervalMs,
+                AdSpinAvailable = adSpinAvailable
             };
             diagnostics = new WheelStateReadDiagnostics
             {
@@ -210,7 +233,8 @@ public sealed class WheelService : IWheelService
         {
             AvailableSpins = availableSpins.Value,
             UpdatedAt = normalizedTimestamp,
-            NextUpdateAt = CalculateNextUpdateTimestamp(normalizedTimestamp)
+            NextUpdateAt = CalculateNextUpdateTimestamp(normalizedTimestamp),
+            AdSpinAvailable = adSpinAvailable
         };
         diagnostics = new WheelStateReadDiagnostics
         {
@@ -289,7 +313,10 @@ public sealed class WheelService : IWheelService
             return false;
         }
 
-        return fortuneWheel.Any(kvp => kvp.Key != AvailableSpinsPropertyName && kvp.Key != UpdatedAtPropertyName);
+        return fortuneWheel.Any(kvp =>
+            kvp.Key != AvailableSpinsPropertyName &&
+            kvp.Key != UpdatedAtPropertyName &&
+            kvp.Key != AdSpinAvailablePropertyName);
     }
 
     private static void SetState(JsonObject root, FortuneWheelModuleSaveData state)
@@ -312,6 +339,7 @@ public sealed class WheelService : IWheelService
 
         fortuneWheel[AvailableSpinsPropertyName] = state.AvailableSpins;
         fortuneWheel[UpdatedAtPropertyName] = state.UpdatedAt;
+        fortuneWheel[AdSpinAvailablePropertyName] = state.AdSpinAvailable;
 
         fortuneWheel.Remove("NextUpdateAt");
         fortuneWheel.Remove("LastResetTimestamp");
@@ -354,6 +382,41 @@ public sealed class WheelService : IWheelService
         if (value is JsonValue stringValue && stringValue.TryGetValue(out string? raw) && long.TryParse(raw, out var parsed))
         {
             return parsed;
+        }
+
+        return null;
+    }
+
+    private static bool? TryGetBool(JsonObject root, string propertyName)
+    {
+        if (!root.TryGetPropertyValue(propertyName, out var value) || value is null)
+        {
+            return null;
+        }
+
+        if (value is JsonValue jsonValue && jsonValue.TryGetValue(out bool boolValue))
+        {
+            return boolValue;
+        }
+
+        if (value is JsonValue stringValue &&
+            stringValue.TryGetValue(out string? raw))
+        {
+            if (bool.TryParse(raw, out var parsedBool))
+            {
+                return parsedBool;
+            }
+
+            if (int.TryParse(raw, out var parsedInt))
+            {
+                return parsedInt != 0;
+            }
+        }
+
+        if (value is JsonValue numberValue &&
+            numberValue.TryGetValue(out int intValue))
+        {
+            return intValue != 0;
         }
 
         return null;

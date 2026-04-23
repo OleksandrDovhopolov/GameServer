@@ -23,7 +23,8 @@ public sealed class RewardDefinitionsSyncTests
             "Bronze_Pack",
             "Emerald_Pack",
             "Sapphire_Pack",
-            "Ruby_Pack"
+            "Ruby_Pack",
+            "fortune_wheel_ad_spin"
         };
 
         var actualRewardIds = definitions.Rewards

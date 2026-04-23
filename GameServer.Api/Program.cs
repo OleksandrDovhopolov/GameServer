@@ -69,6 +69,7 @@ builder.Services.AddScoped<IRewardApplicationService, RewardApplicationService>(
 builder.Services.AddScoped<IPlayerEconomyRepository, RedisPlayerEconomyRepository>();
 builder.Services.AddScoped<IRewardIntentRepository, RedisRewardIntentRepository>();
 builder.Services.AddScoped<IRewardIntentService, RewardIntentService>();
+builder.Services.AddScoped<IDistributedLockService, RedisDistributedLockService>();
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 builder.Services.AddScoped<AdminBasicAuthFilter>();
 builder.Services.AddSingleton<IRandomGenerator, RandomGenerator>();

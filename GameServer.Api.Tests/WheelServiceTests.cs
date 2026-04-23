@@ -6,6 +6,7 @@ using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using System.Collections.Concurrent;
 
 namespace GameServer.Api.Tests;
 
@@ -25,6 +26,7 @@ public sealed class WheelServiceTests
         Assert.Equal(8, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
         Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
 
         var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         var wheel = GetFortuneWheel(root);
@@ -50,6 +52,7 @@ public sealed class WheelServiceTests
         Assert.Equal(2, result.AvailableSpins);
         Assert.Equal(updatedAt, result.UpdatedAt);
         Assert.Equal(updatedAt + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
     }
 
     [Fact]
@@ -66,6 +69,7 @@ public sealed class WheelServiceTests
         Assert.Equal(1, result.AvailableSpins);
         Assert.Equal(updatedAt, result.UpdatedAt);
         Assert.Equal(updatedAt + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
 
         var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         var wheel = GetFortuneWheel(root);
@@ -89,6 +93,7 @@ public sealed class WheelServiceTests
         Assert.Equal(7, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
         Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
     }
 
     [Fact]
@@ -156,6 +161,7 @@ public sealed class WheelServiceTests
         Assert.Equal(8, result.AvailableSpins);
         Assert.Equal(updatedAt, result.UpdatedAt);
         Assert.Equal(updatedAt + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
     }
 
     [Fact]
@@ -171,6 +177,7 @@ public sealed class WheelServiceTests
         Assert.Equal(8, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
         Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
 
         var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         var wheel = GetFortuneWheel(root);
@@ -194,6 +201,7 @@ public sealed class WheelServiceTests
         Assert.Equal(4, result.AvailableSpins);
         Assert.Equal(updatedAtMs, result.UpdatedAt);
         Assert.Equal(updatedAtMs + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
 
         var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         Assert.Equal(updatedAtMs, GetFortuneWheel(root)["UpdatedAt"]!.GetValue<long>());
@@ -214,6 +222,7 @@ public sealed class WheelServiceTests
         Assert.Equal(1, result.AvailableSpins);
         Assert.Equal(updatedAtMs, result.UpdatedAt);
         Assert.Equal(updatedAtMs + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
 
         var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         var wheel = GetFortuneWheel(root);
@@ -234,6 +243,7 @@ public sealed class WheelServiceTests
         Assert.Equal(8, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
         Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
     }
 
     [Fact]
@@ -249,6 +259,7 @@ public sealed class WheelServiceTests
         Assert.Equal(7, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
         Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
 
         var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         var wheel = GetFortuneWheel(root);
@@ -270,6 +281,7 @@ public sealed class WheelServiceTests
         Assert.Equal(6, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
         Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
 
         var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         var wheel = GetFortuneWheel(root);
@@ -290,6 +302,7 @@ public sealed class WheelServiceTests
         Assert.Equal(8, result.AvailableSpins);
         Assert.Equal(now, result.UpdatedAt);
         Assert.Equal(now + RegenIntervalMs, result.NextUpdateAt);
+        Assert.False(result.AdSpinAvailable);
 
         var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
         Assert.Null(root["availableSpins"]);
@@ -301,12 +314,70 @@ public sealed class WheelServiceTests
         return $"{{\"FortuneWheel\":{{\"AvailableSpins\":{availableSpins},\"UpdatedAt\":{updatedAt}}}}}";
     }
 
+    [Fact]
+    public async Task Spin_WhenAdSpinAvailableAndNoRegularSpins_ConsumesAdSpinWithoutChangingRegularSpins()
+    {
+        const long now = 1_700_000_000_000;
+        var updatedAt = now - (60 * 1000);
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":0,\"UpdatedAt\":{updatedAt},\"AdSpinAvailable\":true}}}}");
+        var service = CreateService(repository, now);
+
+        var result = await service.SpinAsync("p1", CancellationToken.None);
+
+        Assert.Equal(0, result.AvailableSpins);
+        Assert.False(result.AdSpinAvailable);
+
+        var root = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
+        var wheel = GetFortuneWheel(root);
+        Assert.Equal(0, wheel["AvailableSpins"]!.GetValue<int>());
+        Assert.False(wheel["AdSpinAvailable"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Spin_WhenRegularAndAdSpinAvailable_UsesRegularSpinFirst()
+    {
+        const long now = 1_700_000_000_000;
+        var updatedAt = now - (60 * 1000);
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":2,\"UpdatedAt\":{updatedAt},\"AdSpinAvailable\":true}}}}");
+        var service = CreateService(repository, now);
+
+        var result = await service.SpinAsync("p1", CancellationToken.None);
+
+        Assert.Equal(1, result.AvailableSpins);
+        Assert.True(result.AdSpinAvailable);
+    }
+
+    [Fact]
+    public async Task Spin_WhenParallelRequestsWithSingleAdSpin_OnlyOneRequestSucceeds()
+    {
+        const long now = 1_700_000_000_000;
+        var updatedAt = now - (60 * 1000);
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":0,\"UpdatedAt\":{updatedAt},\"AdSpinAvailable\":true}}}}");
+        var service = CreateService(repository, now, new SemaphoreDistributedLockService());
+
+        var firstTask = service.SpinAsync("p1", CancellationToken.None);
+        var secondTask = service.SpinAsync("p1", CancellationToken.None);
+
+        var firstResult = await firstTask;
+        var secondException = await Assert.ThrowsAsync<NoSpinsAvailableException>(() => secondTask);
+
+        Assert.Equal(0, firstResult.AvailableSpins);
+        Assert.False(firstResult.AdSpinAvailable);
+        Assert.Equal(updatedAt, secondException.UpdatedAt);
+    }
+
     private static JsonObject GetFortuneWheel(JsonObject root)
     {
         return root["FortuneWheel"]!.AsObject();
     }
 
-    private static WheelService CreateService(InMemorySaveRepository repository, long now)
+    private static WheelService CreateService(
+        InMemorySaveRepository repository,
+        long now,
+        IDistributedLockService? distributedLockService = null)
     {
         return new WheelService(
             new InMemoryPlayerAggregateRepository(repository),
@@ -314,6 +385,7 @@ public sealed class WheelServiceTests
             new FixedClock(now),
             new StubRewardDefinitionRepository("wheel"),
             new NoOpRewardPartApplier(),
+            distributedLockService ?? new NoOpDistributedLockService(),
             NullLogger<WheelService>.Instance);
     }
 
@@ -344,7 +416,7 @@ public sealed class WheelServiceTests
 
     private sealed class InMemorySaveRepository : ISaveRepository
     {
-        private readonly Dictionary<string, SaveRecord> _store = new(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, SaveRecord> _store = new(StringComparer.Ordinal);
 
         public void Seed(string playerId, string data)
         {
@@ -386,7 +458,7 @@ public sealed class WheelServiceTests
         public Task DeleteAsync(string playerId, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _store.Remove(playerId);
+            _store.TryRemove(playerId, out _);
             return Task.CompletedTask;
         }
 
@@ -471,6 +543,51 @@ public sealed class WheelServiceTests
         {
             ct.ThrowIfCancellationRequested();
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class NoOpDistributedLockService : IDistributedLockService
+    {
+        public Task<IAsyncDisposable> AcquireAsync(string key, TimeSpan ttl, CancellationToken ct)
+        {
+            return Task.FromResult<IAsyncDisposable>(new Releaser());
+        }
+
+        private sealed class Releaser : IAsyncDisposable
+        {
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class SemaphoreDistributedLockService : IDistributedLockService
+    {
+        private readonly SemaphoreSlim _semaphore = new(1, 1);
+
+        public async Task<IAsyncDisposable> AcquireAsync(string key, TimeSpan ttl, CancellationToken ct)
+        {
+            await _semaphore.WaitAsync(ct);
+            return new Releaser(_semaphore);
+        }
+
+        private sealed class Releaser : IAsyncDisposable
+        {
+            private readonly SemaphoreSlim _semaphore;
+            private int _disposed;
+
+            public Releaser(SemaphoreSlim semaphore)
+            {
+                _semaphore = semaphore;
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                {
+                    _semaphore.Release();
+                }
+
+                return ValueTask.CompletedTask;
+            }
         }
     }
 }

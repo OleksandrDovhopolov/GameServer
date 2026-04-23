@@ -7,6 +7,7 @@ using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
+using System.Text.Json.Nodes;
 
 namespace GameServer.Api.Tests;
 
@@ -234,6 +235,42 @@ public sealed class RewardIntentServiceTests
     }
 
     [Fact]
+    public async Task Callback_WhenAdSpinReward_FulfillsWithoutGrantAndActivatesAdSpin()
+    {
+        var repository = new InMemoryRewardIntentRepository();
+        repository.SeedIntent(new RewardIntentRecord
+        {
+            RewardIntentId = "ri_ad_spin",
+            PlayerId = "player_1",
+            RewardId = "fortune_wheel_ad_spin",
+            Status = RewardIntentStatuses.Pending,
+            CreatedAtUtc = 1000,
+            UpdatedAtUtc = 1000,
+            ExpiresAtUtc = 1_000_000
+        });
+        var aggregateRepository = new FakePlayerAggregateRepository();
+        var queueService = new QueueRewardApplicationService(
+        [
+            new GrantRewardResponse { Success = true, RewardId = "fortune_wheel_ad_spin" }
+        ]);
+        var service = CreateService(
+            repository,
+            supportedRewardIds: ["fortune_wheel_ad_spin"],
+            playerExists: true,
+            grantResponses: [],
+            aggregateRepository: aggregateRepository,
+            rewardApplicationService: queueService);
+
+        var response = await service.ConfirmIntentFromAdCallbackGetAsync("levelplay", "ri_ad_spin", "evt_ad_1", "{}", CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.Equal(RewardIntentStatuses.Fulfilled, response.Status);
+        Assert.Null(response.ActionResult);
+        Assert.Equal(0, queueService.CallCount);
+        Assert.True(aggregateRepository.GetAdSpinAvailable("player_1"));
+    }
+
+    [Fact]
     public async Task CallbackGet_WhenResourceRewardFulfilled_ReturnsResourceDelta()
     {
         var repository = new InMemoryRewardIntentRepository();
@@ -420,13 +457,18 @@ public sealed class RewardIntentServiceTests
         bool playerExists,
         IReadOnlyList<GrantRewardResponse> grantResponses,
         long nowUtcMs = 5_000,
-        IReadOnlyDictionary<string, RewardDefinition>? rewardDefinitions = null)
+        IReadOnlyDictionary<string, RewardDefinition>? rewardDefinitions = null,
+        FakePlayerAggregateRepository? aggregateRepository = null,
+        QueueRewardApplicationService? rewardApplicationService = null)
     {
+        aggregateRepository ??= new FakePlayerAggregateRepository();
+        rewardApplicationService ??= new QueueRewardApplicationService(grantResponses);
         return new RewardIntentService(
             repository,
             new FakePlayerEconomyRepository(playerExists),
+            aggregateRepository,
             new FakeRewardDefinitionRepository(supportedRewardIds, rewardDefinitions),
-            new QueueRewardApplicationService(grantResponses),
+            rewardApplicationService,
             new FakeClock(nowUtcMs),
             NullLogger<RewardIntentService>.Instance);
     }
@@ -493,6 +535,7 @@ public sealed class RewardIntentServiceTests
     private sealed class QueueRewardApplicationService : IRewardApplicationService
     {
         private readonly Queue<GrantRewardResponse> _responses;
+        public int CallCount { get; private set; }
 
         public QueueRewardApplicationService(IReadOnlyList<GrantRewardResponse> responses)
         {
@@ -501,6 +544,7 @@ public sealed class RewardIntentServiceTests
 
         public Task<GrantRewardResponse> GrantAsync(GrantRewardCommand command, CancellationToken ct = default)
         {
+            CallCount += 1;
             if (_responses.Count == 0)
             {
                 return Task.FromResult(new GrantRewardResponse
@@ -511,6 +555,80 @@ public sealed class RewardIntentServiceTests
             }
 
             return Task.FromResult(_responses.Dequeue());
+        }
+    }
+
+    private sealed class FakePlayerAggregateRepository : IPlayerAggregateRepository
+    {
+        private readonly Dictionary<string, PlayerAggregate> _players = new(StringComparer.Ordinal);
+
+        public Task<PlayerAggregate> LoadAsync(string playerId, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (!_players.TryGetValue(playerId, out var player))
+            {
+                player = new PlayerAggregate
+                {
+                    PlayerId = playerId,
+                    RootDocument = [],
+                    Resources = new Dictionary<string, int>(StringComparer.Ordinal)
+                    {
+                        ["Gold"] = 0,
+                        ["Energy"] = 0,
+                        ["Gems"] = 0
+                    },
+                    InventoryItems = new Dictionary<string, int>(StringComparer.Ordinal)
+                };
+                _players[playerId] = Clone(player);
+            }
+
+            return Task.FromResult(Clone(player));
+        }
+
+        public Task SaveAsync(PlayerAggregate player, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            _players[player.PlayerId] = Clone(player);
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(string playerId, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            _players.Remove(playerId);
+            return Task.CompletedTask;
+        }
+
+        public bool GetAdSpinAvailable(string playerId)
+        {
+            if (!_players.TryGetValue(playerId, out var player))
+            {
+                return false;
+            }
+
+            if (!player.RootDocument.TryGetPropertyValue("FortuneWheel", out var wheelNode) || wheelNode is not JsonObject wheel)
+            {
+                return false;
+            }
+
+            if (!wheel.TryGetPropertyValue("AdSpinAvailable", out var adNode) || adNode is not JsonValue value)
+            {
+                return false;
+            }
+
+            return value.TryGetValue(out bool adSpinAvailable) && adSpinAvailable;
+        }
+
+        private static PlayerAggregate Clone(PlayerAggregate source)
+        {
+            return new PlayerAggregate
+            {
+                PlayerId = source.PlayerId,
+                RootDocument = source.RootDocument.DeepClone().AsObject(),
+                LastModified = source.LastModified,
+                Resources = new Dictionary<string, int>(source.Resources, StringComparer.Ordinal),
+                InventoryItems = new Dictionary<string, int>(source.InventoryItems, StringComparer.Ordinal)
+            };
         }
     }
 

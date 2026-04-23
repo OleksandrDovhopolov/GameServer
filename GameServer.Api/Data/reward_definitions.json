@@ -233,6 +233,18 @@
                                           "category":  "card_pack"
                                       }
                                   ]
+                    },
+                    {
+                        "rewardId":  "fortune_wheel_ad_spin",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  7,
+                                          "targetId":  "FortuneWheel",
+                                          "amount":  1,
+                                          "category":  "ad_spin"
+                                      }
+                                  ]
                     }
                 ]
 }

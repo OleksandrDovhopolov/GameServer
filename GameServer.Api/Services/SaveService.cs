@@ -12,6 +12,7 @@ public sealed class SaveService : ISaveService
     private const string FortuneWheelPropertyName = "FortuneWheel";
     private const string AvailableSpinsPropertyName = "AvailableSpins";
     private const string UpdatedAtPropertyName = "UpdatedAt";
+    private const string AdSpinAvailablePropertyName = "AdSpinAvailable";
     private const string ResourcesPropertyName = "Resources";
     private const string InventoryPropertyName = "Inventory";
     private const string InventoryItemsPropertyName = "InventoryItems";
@@ -217,6 +218,16 @@ public sealed class SaveService : ISaveService
             actions.Add("IgnoredInvalidIncomingUpdatedAt");
         }
 
+        var adSpinAvailable = existingState.AdSpinAvailable ?? false;
+        if (incomingState.AdSpinAvailable is not null && incomingState.AdSpinAvailable != adSpinAvailable)
+        {
+            actions.Add("IgnoredClientAdSpinAvailable");
+        }
+        else if (incomingState.AdSpinAvailable is null && existingState.AdSpinAvailable is not null)
+        {
+            actions.Add("MergedAdSpinAvailableFromExisting");
+        }
+
         if (incomingFortuneWheel.ContainsKey("NextUpdateAt"))
         {
             incomingFortuneWheel.Remove("NextUpdateAt");
@@ -238,6 +249,7 @@ public sealed class SaveService : ISaveService
         }
 
         incomingFortuneWheel[UpdatedAtPropertyName] = updatedAt.Value;
+        incomingFortuneWheel[AdSpinAvailablePropertyName] = adSpinAvailable;
     }
 
     private static WheelSaveReadResult ReadWheelState(JsonObject? wheelNode, long now)
@@ -249,6 +261,7 @@ public sealed class SaveService : ISaveService
 
         var availableSpins = TryGetInt(wheelNode, AvailableSpinsPropertyName);
         var rawUpdatedAt = TryGetLong(wheelNode, UpdatedAtPropertyName);
+        var adSpinAvailable = TryGetBool(wheelNode, AdSpinAvailablePropertyName);
         long? updatedAt = null;
         var updatedAtWasNormalized = false;
         var updatedAtWasInvalid = false;
@@ -270,6 +283,7 @@ public sealed class SaveService : ISaveService
             AvailableSpins = availableSpins,
             RawUpdatedAt = rawUpdatedAt,
             UpdatedAt = updatedAt,
+            AdSpinAvailable = adSpinAvailable,
             UpdatedAtWasNormalized = updatedAtWasNormalized,
             UpdatedAtWasInvalid = updatedAtWasInvalid
         };
@@ -404,11 +418,47 @@ public sealed class SaveService : ISaveService
         return null;
     }
 
+    private static bool? TryGetBool(JsonObject source, string propertyName)
+    {
+        if (!source.TryGetPropertyValue(propertyName, out var propertyValue) || propertyValue is null)
+        {
+            return null;
+        }
+
+        if (propertyValue is JsonValue boolValue && boolValue.TryGetValue(out bool parsedBool))
+        {
+            return parsedBool;
+        }
+
+        if (propertyValue is JsonValue stringValue &&
+            stringValue.TryGetValue(out string? raw))
+        {
+            if (bool.TryParse(raw, out var stringParsedBool))
+            {
+                return stringParsedBool;
+            }
+
+            if (int.TryParse(raw, out var parsedInt))
+            {
+                return parsedInt != 0;
+            }
+        }
+
+        if (propertyValue is JsonValue numberValue &&
+            numberValue.TryGetValue(out int intValue))
+        {
+            return intValue != 0;
+        }
+
+        return null;
+    }
+
     private readonly struct WheelSaveReadResult
     {
         public int? AvailableSpins { get; init; }
         public long? RawUpdatedAt { get; init; }
         public long? UpdatedAt { get; init; }
+        public bool? AdSpinAvailable { get; init; }
         public bool UpdatedAtWasNormalized { get; init; }
         public bool UpdatedAtWasInvalid { get; init; }
     }

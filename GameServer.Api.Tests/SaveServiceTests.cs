@@ -97,6 +97,38 @@ public sealed class SaveServiceTests
     }
 
     [Fact]
+    public async Task Save_WhenClientSendsAdSpinAvailable_IgnoresIncomingValue()
+    {
+        const long now = 1_700_000_000_000;
+        const long updatedAt = now - 1_000;
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":6,\"UpdatedAt\":{updatedAt},\"AdSpinAvailable\":false}}}}");
+        var service = CreateService(repository, now);
+
+        await service.SaveAsync("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":6,\"UpdatedAt\":{updatedAt},\"AdSpinAvailable\":true}}}}", CancellationToken.None);
+
+        var saved = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
+        var wheel = GetFortuneWheel(saved);
+        Assert.False(wheel["AdSpinAvailable"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Save_WhenIncomingOmitsAdSpinAvailable_PreservesExistingValue()
+    {
+        const long now = 1_700_000_000_000;
+        const long updatedAt = now - 1_000;
+        var repository = new InMemorySaveRepository();
+        repository.Seed("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":6,\"UpdatedAt\":{updatedAt},\"AdSpinAvailable\":true}}}}");
+        var service = CreateService(repository, now);
+
+        await service.SaveAsync("p1", $"{{\"FortuneWheel\":{{\"AvailableSpins\":5,\"UpdatedAt\":{updatedAt}}}}}", CancellationToken.None);
+
+        var saved = JsonNode.Parse(repository.GetData("p1")!)!.AsObject();
+        var wheel = GetFortuneWheel(saved);
+        Assert.True(wheel["AdSpinAvailable"]!.GetValue<bool>());
+    }
+
+    [Fact]
     public async Task Save_WhenIncomingUpdatedAtIsSeconds_NormalizesToMilliseconds()
     {
         const long now = 1_700_000_000_000;
