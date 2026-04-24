@@ -335,7 +335,7 @@ public sealed class WheelServiceTests
     }
 
     [Fact]
-    public async Task Spin_WhenRegularAndAdSpinAvailable_UsesRegularSpinFirst()
+    public async Task Spin_WhenRegularAndAdSpinAvailable_UsesAdSpinFirst()
     {
         const long now = 1_700_000_000_000;
         var updatedAt = now - (60 * 1000);
@@ -345,8 +345,8 @@ public sealed class WheelServiceTests
 
         var result = await service.SpinAsync("p1", CancellationToken.None);
 
-        Assert.Equal(1, result.AvailableSpins);
-        Assert.True(result.AdSpinAvailable);
+        Assert.Equal(2, result.AvailableSpins);
+        Assert.False(result.AdSpinAvailable);
     }
 
     [Fact]

@@ -115,16 +115,23 @@ public sealed class WheelService : IWheelService
         }
 
         var rewardId = _rewardCatalog.RollRewardId();
-        if (state.AvailableSpins > 0)
-        {
-            state.AvailableSpins -= 1;
-        }
-        else
+        var usedAdSpin = state.AdSpinAvailable;
+        if (usedAdSpin)
         {
             state.AdSpinAvailable = false;
         }
+        else
+        {
+            state.AvailableSpins -= 1;
+        }
 
         state.NextUpdateAt = CalculateNextUpdateTimestamp(state.UpdatedAt);
+        _logger.LogInformation(
+            "Wheel spin consumption resolved. PlayerId: {PlayerId}, UsedAdSpin: {UsedAdSpin}, AvailableSpinsAfterConsume: {AvailableSpinsAfterConsume}, AdSpinAvailableAfterConsume: {AdSpinAvailableAfterConsume}",
+            playerId,
+            usedAdSpin,
+            state.AvailableSpins,
+            state.AdSpinAvailable);
 
         var rewardDefinition = await _rewardDefinitionRepository.GetByIdAsync(rewardId, cancellationToken);
         if (rewardDefinition is null)
