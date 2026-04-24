@@ -36,7 +36,10 @@ public sealed class BattlePassServiceTests
         var response = await service.GetCurrentAsync("p1", CancellationToken.None);
 
         Assert.NotNull(response.Season);
+        Assert.NotNull(response.Products);
         Assert.NotNull(response.UserState);
+        Assert.Equal("battle_pass_gold_season_1", response.Products!.GoldProductId);
+        Assert.Equal("battle_pass_platinum_season_1", response.Products.PlatinumProductId);
         Assert.Equal(BattlePassPassTypes.None, response.UserState!.PassType);
         Assert.Equal(1, response.UserState.Level);
         var storedState = await stateRepository.GetAsync("p1", "season_1", CancellationToken.None);

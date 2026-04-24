@@ -64,6 +64,7 @@ public sealed class BattlePassService : IBattlePassService
             return new BattlePassCurrentResponse
             {
                 Season = null,
+                Products = null,
                 UserState = null,
                 Levels = [],
                 ServerTimeUtc = UnixTimeHelper.ToUtcIsoString(nowUtcMs)
@@ -77,6 +78,11 @@ public sealed class BattlePassService : IBattlePassService
         return new BattlePassCurrentResponse
         {
             Season = ToSeasonDto(activeSeason),
+            Products = new BattlePassProductsDto
+            {
+                GoldProductId = activeSeason.GoldProductId,
+                PlatinumProductId = activeSeason.PlatinumProductId
+            },
             UserState = await BuildStateDtoAsync(playerId, activeSeason.Id, state, levels, passType, ct),
             Levels = await BuildLevelDtosAsync(levels, ct),
             ServerTimeUtc = UnixTimeHelper.ToUtcIsoString(nowUtcMs)

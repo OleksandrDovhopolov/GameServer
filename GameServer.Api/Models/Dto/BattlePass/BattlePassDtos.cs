@@ -58,9 +58,16 @@ public sealed class BattlePassStateDto
     public List<BattlePassClaimableRewardDto> ClaimableRewards { get; init; } = [];
 }
 
+public sealed class BattlePassProductsDto
+{
+    public string GoldProductId { get; init; } = string.Empty;
+    public string PlatinumProductId { get; init; } = string.Empty;
+}
+
 public sealed class BattlePassCurrentResponse
 {
     public BattlePassSeasonDto? Season { get; init; }
+    public BattlePassProductsDto? Products { get; init; }
     public BattlePassStateDto? UserState { get; init; }
     public List<BattlePassLevelDto> Levels { get; init; } = [];
     public string ServerTimeUtc { get; init; } = string.Empty;
