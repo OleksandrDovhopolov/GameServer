@@ -70,6 +70,17 @@ builder.Services.AddScoped<IPlayerEconomyRepository, RedisPlayerEconomyRepositor
 builder.Services.AddScoped<IRewardIntentRepository, RedisRewardIntentRepository>();
 builder.Services.AddScoped<IRewardIntentService, RewardIntentService>();
 builder.Services.AddScoped<IDistributedLockService, RedisDistributedLockService>();
+builder.Services.AddScoped<IBattlePassSeasonRepository, RedisBattlePassSeasonRepository>();
+builder.Services.AddScoped<IBattlePassStateRepository, RedisBattlePassStateRepository>();
+builder.Services.AddScoped<IEntitlementRepository, RedisEntitlementRepository>();
+builder.Services.AddScoped<IPurchaseRepository, RedisPurchaseRepository>();
+builder.Services.AddScoped<IProductCatalogRepository, RedisProductCatalogRepository>();
+builder.Services.AddScoped<IEntitlementService, EntitlementService>();
+builder.Services.AddScoped<ILiveOpsScheduleItemProvider, BattlePassLiveOpsProvider>();
+builder.Services.AddScoped<IBattlePassService, BattlePassService>();
+builder.Services.AddScoped<IIapService, IapService>();
+builder.Services.AddScoped<IBattlePassAdminService, BattlePassAdminService>();
+builder.Services.AddScoped<IGooglePlayPurchaseVerifier, StubGooglePlayPurchaseVerifier>();
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 builder.Services.AddScoped<AdminBasicAuthFilter>();
 builder.Services.AddSingleton<IRandomGenerator, RandomGenerator>();
