@@ -19,7 +19,7 @@ public sealed class LiveOpsControllerTests
             {
                 Items =
                 [
-                    new LiveOpsScheduleItemDto
+                    new PublicLiveOpsScheduleItemDto
                     {
                         Id = "Winter_Collection",
                         EventType = "CardCollection",
@@ -38,7 +38,7 @@ public sealed class LiveOpsControllerTests
         var result = await controller.GetSchedule(CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var payload = Assert.IsAssignableFrom<IReadOnlyList<LiveOpsScheduleItemDto>>(ok.Value);
+        var payload = Assert.IsAssignableFrom<IReadOnlyList<PublicLiveOpsScheduleItemDto>>(ok.Value);
         var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         Assert.Contains("\"Id\":\"Winter_Collection\"", json);
         Assert.Contains("\"Priority\":10", json);
@@ -64,10 +64,10 @@ public sealed class LiveOpsControllerTests
 
     private sealed class StubLiveOpsScheduleService : ILiveOpsScheduleService
     {
-        public IReadOnlyList<LiveOpsScheduleItemDto> Items { get; init; } = [];
+        public IReadOnlyList<PublicLiveOpsScheduleItemDto> Items { get; init; } = [];
         public Exception? Exception { get; init; }
 
-        public Task<IReadOnlyList<LiveOpsScheduleItemDto>> GetScheduleAsync(CancellationToken ct = default)
+        public Task<IReadOnlyList<PublicLiveOpsScheduleItemDto>> GetScheduleAsync(CancellationToken ct = default)
         {
             if (Exception is not null)
             {

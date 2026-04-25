@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace GameServer.Api.Models.Dto.LiveOps;
 
-public sealed class LiveOpsScheduleItemDto
+public sealed class PublicLiveOpsScheduleItemDto
 {
     [JsonPropertyName("Id")]
     public string Id { get; init; } = string.Empty;

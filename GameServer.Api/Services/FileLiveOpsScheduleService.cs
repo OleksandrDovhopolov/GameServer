@@ -23,7 +23,7 @@ public sealed class FileLiveOpsScheduleService : ILiveOpsScheduleService
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<LiveOpsScheduleItemDto>> GetScheduleAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<PublicLiveOpsScheduleItemDto>> GetScheduleAsync(CancellationToken ct = default)
     {
         var filePath = Path.Combine(_environment.ContentRootPath, "Data", ScheduleFileName);
         if (!File.Exists(filePath))
@@ -38,7 +38,7 @@ public sealed class FileLiveOpsScheduleService : ILiveOpsScheduleService
             throw new InvalidOperationException("LiveOps schedule configuration is empty.");
         }
 
-        var result = new List<LiveOpsScheduleItemDto>(items.Count);
+        var result = new List<PublicLiveOpsScheduleItemDto>(items.Count);
         for (var index = 0; index < items.Count; index++)
         {
             result.Add(MapAndValidate(items[index], index));
@@ -48,7 +48,7 @@ public sealed class FileLiveOpsScheduleService : ILiveOpsScheduleService
         return result;
     }
 
-    private static LiveOpsScheduleItemDto MapAndValidate(LiveOpsScheduleFileItem item, int index)
+    private static PublicLiveOpsScheduleItemDto MapAndValidate(LiveOpsScheduleFileItem item, int index)
     {
         if (string.IsNullOrWhiteSpace(item.Id) ||
             string.IsNullOrWhiteSpace(item.EventType) ||
@@ -61,7 +61,7 @@ public sealed class FileLiveOpsScheduleService : ILiveOpsScheduleService
             throw new InvalidOperationException($"LiveOps schedule item at index {index} is missing required fields.");
         }
 
-        return new LiveOpsScheduleItemDto
+        return new PublicLiveOpsScheduleItemDto
         {
             Id = item.Id,
             EventType = item.EventType,
