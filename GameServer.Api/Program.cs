@@ -77,6 +77,7 @@ builder.Services.AddScoped<IPurchaseRepository, RedisPurchaseRepository>();
 builder.Services.AddScoped<IProductCatalogRepository, RedisProductCatalogRepository>();
 builder.Services.AddScoped<IEntitlementService, EntitlementService>();
 builder.Services.AddScoped<ILiveOpsScheduleItemProvider, BattlePassLiveOpsProvider>();
+builder.Services.AddScoped<ILiveOpsScheduleService, FileLiveOpsScheduleService>();
 builder.Services.AddScoped<IBattlePassService, BattlePassService>();
 builder.Services.AddScoped<IIapService, IapService>();
 builder.Services.AddScoped<IBattlePassAdminService, BattlePassAdminService>();
