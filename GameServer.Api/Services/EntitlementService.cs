@@ -43,7 +43,7 @@ public sealed class EntitlementService : IEntitlementService
         CancellationToken ct = default)
     {
         var entitlements = await _entitlementRepository.GetByPlayerAsync(playerId, ct);
-        UserEntitlementRecord? gold = null;
+        UserEntitlementRecord? premium = null;
         UserEntitlementRecord? platinum = null;
         foreach (var entitlement in entitlements)
         {
@@ -68,13 +68,13 @@ public sealed class EntitlementService : IEntitlementService
             {
                 platinum = entitlement;
             }
-            else if (string.Equals(passType, BattlePassPassTypes.Gold, StringComparison.Ordinal))
+            else if (string.Equals(passType, BattlePassPassTypes.Premium, StringComparison.Ordinal))
             {
-                gold = entitlement;
+                premium = entitlement;
             }
         }
 
-        return platinum ?? gold;
+        return platinum ?? premium;
     }
 
     public async Task<EntitlementMutationResult> GrantBattlePassEntitlementAsync(
@@ -94,20 +94,20 @@ public sealed class EntitlementService : IEntitlementService
 
         var nowUtcMs = _clock.UtcNowUnixMilliseconds;
         var entitlements = await _entitlementRepository.GetByPlayerAsync(playerId, ct);
-        var activeGold = entitlements.FirstOrDefault(x =>
+        var activePremium = entitlements.FirstOrDefault(x =>
             string.Equals(GetEffectiveStatus(x, nowUtcMs), EntitlementStatuses.Active, StringComparison.Ordinal) &&
             MatchesSeason(x, seasonId) &&
-            string.Equals(GetPassType(x), BattlePassPassTypes.Gold, StringComparison.Ordinal));
+            string.Equals(GetPassType(x), BattlePassPassTypes.Premium, StringComparison.Ordinal));
         var activePlatinum = entitlements.FirstOrDefault(x =>
             string.Equals(GetEffectiveStatus(x, nowUtcMs), EntitlementStatuses.Active, StringComparison.Ordinal) &&
             MatchesSeason(x, seasonId) &&
             string.Equals(GetPassType(x), BattlePassPassTypes.Platinum, StringComparison.Ordinal));
 
-        if (string.Equals(passType, BattlePassPassTypes.Gold, StringComparison.Ordinal))
+        if (string.Equals(passType, BattlePassPassTypes.Premium, StringComparison.Ordinal))
         {
-            if (activeGold is not null || activePlatinum is not null)
+            if (activePremium is not null || activePlatinum is not null)
             {
-                return BuildFailure("Player already owns gold or better pass.", BattlePassErrorCodes.PassAlreadyOwned);
+                return BuildFailure("Player already owns premium or better pass.", BattlePassErrorCodes.PassAlreadyOwned);
             }
         }
 
@@ -118,17 +118,17 @@ public sealed class EntitlementService : IEntitlementService
                 return BuildFailure("Player already owns platinum pass.", BattlePassErrorCodes.PassAlreadyOwned);
             }
 
-            if (activeGold is not null)
+            if (activePremium is not null)
             {
-                var revokedGold = CloneEntitlement(activeGold, EntitlementStatuses.Revoked, nowUtcMs);
-                await _entitlementRepository.SaveAsync(revokedGold, ct);
+                var revokedPremium = CloneEntitlement(activePremium, EntitlementStatuses.Revoked, nowUtcMs);
+                await _entitlementRepository.SaveAsync(revokedPremium, ct);
                 _logger.LogInformation(
                     "{EventName} PlayerId: {PlayerId}, SeasonId: {SeasonId}, PassType: {PassType}, EntitlementId: {EntitlementId}",
                     BattlePassTelemetry.EntitlementRevoked,
                     playerId,
                     seasonId,
-                    BattlePassPassTypes.Gold,
-                    revokedGold.Id);
+                    BattlePassPassTypes.Premium,
+                    revokedPremium.Id);
             }
         }
 
@@ -253,7 +253,7 @@ public sealed class EntitlementService : IEntitlementService
 
     private static bool IsSupportedPassType(string passType)
     {
-        return string.Equals(passType, BattlePassPassTypes.Gold, StringComparison.Ordinal) ||
+        return string.Equals(passType, BattlePassPassTypes.Premium, StringComparison.Ordinal) ||
                string.Equals(passType, BattlePassPassTypes.Platinum, StringComparison.Ordinal);
     }
 

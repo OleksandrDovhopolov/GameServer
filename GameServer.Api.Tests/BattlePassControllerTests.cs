@@ -52,7 +52,7 @@ public sealed class BattlePassControllerTests
             ClaimResponse = new BattlePassClaimResponse
             {
                 Success = true,
-                BattlePass = new BattlePassStateDto { SeasonId = "season_1", PassType = "gold" }
+                BattlePass = new BattlePassStateDto { SeasonId = "season_1", PassType = "premium" }
             }
         });
 

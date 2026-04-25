@@ -421,7 +421,7 @@ internal static class BattlePassTestFactory
             MaxLevel = maxLevel,
             Status = status,
             ConfigVersion = "v1",
-            GoldProductId = $"battle_pass_gold_{seasonId}",
+            PremiumProductId = $"battle_pass_premium_{seasonId}",
             PlatinumProductId = $"battle_pass_platinum_{seasonId}",
             CreatedAtUtcMs = startAtUtcMs - 1000,
             UpdatedAtUtcMs = startAtUtcMs - 1000
@@ -438,8 +438,7 @@ internal static class BattlePassTestFactory
                 Level = 1,
                 XpRequired = 0,
                 DefaultRewardIds = ["reward_default_1"],
-                PremiumRewardIds = ["reward_premium_1"],
-                PlatinumRewardIds = ["reward_platinum_1"]
+                PremiumRewardIds = ["reward_premium_1"]
             },
             new BattlePassLevelRecord
             {
@@ -447,8 +446,7 @@ internal static class BattlePassTestFactory
                 Level = 2,
                 XpRequired = 100,
                 DefaultRewardIds = ["reward_default_2"],
-                PremiumRewardIds = ["reward_premium_2"],
-                PlatinumRewardIds = ["reward_platinum_2"]
+                PremiumRewardIds = ["reward_premium_2"]
             }
         ];
     }
@@ -459,10 +457,8 @@ internal static class BattlePassTestFactory
                  {
                      "reward_default_1",
                      "reward_premium_1",
-                     "reward_platinum_1",
                      "reward_default_2",
-                     "reward_premium_2",
-                     "reward_platinum_2"
+                     "reward_premium_2"
                  })
         {
             repository.Seed(new RewardDefinition

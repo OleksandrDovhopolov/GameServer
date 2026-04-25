@@ -49,7 +49,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             request.EndAtUtc,
             request.MaxLevel,
             request.ConfigVersion,
-            request.GoldProductId,
+            request.PremiumProductId,
             request.PlatinumProductId,
             BattlePassSeasonStatuses.Draft,
             createdAtUtcMs: _clock.UtcNowUnixMilliseconds,
@@ -96,7 +96,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             request.EndAtUtc,
             request.MaxLevel,
             request.ConfigVersion,
-            request.GoldProductId,
+            request.PremiumProductId,
             request.PlatinumProductId,
             current.Status,
             current.CreatedAtUtcMs,
@@ -144,8 +144,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
                 Level = x.Level,
                 XpRequired = x.XpRequired,
                 DefaultRewardIds = x.DefaultRewardIds.Distinct(StringComparer.Ordinal).ToList(),
-                PremiumRewardIds = x.PremiumRewardIds.Distinct(StringComparer.Ordinal).ToList(),
-                PlatinumRewardIds = x.PlatinumRewardIds.Distinct(StringComparer.Ordinal).ToList()
+                PremiumRewardIds = x.PremiumRewardIds.Distinct(StringComparer.Ordinal).ToList()
             })
             .ToList();
 
@@ -187,7 +186,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             MaxLevel = season.MaxLevel,
             Status = BattlePassSeasonStatuses.Scheduled,
             ConfigVersion = season.ConfigVersion,
-            GoldProductId = season.GoldProductId,
+            PremiumProductId = season.PremiumProductId,
             PlatinumProductId = season.PlatinumProductId,
             CreatedAtUtcMs = season.CreatedAtUtcMs,
             UpdatedAtUtcMs = _clock.UtcNowUnixMilliseconds
@@ -219,7 +218,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             MaxLevel = season.MaxLevel,
             Status = BattlePassSeasonStatuses.Archived,
             ConfigVersion = season.ConfigVersion,
-            GoldProductId = season.GoldProductId,
+            PremiumProductId = season.PremiumProductId,
             PlatinumProductId = season.PlatinumProductId,
             CreatedAtUtcMs = season.CreatedAtUtcMs,
             UpdatedAtUtcMs = _clock.UtcNowUnixMilliseconds
@@ -403,7 +402,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
         }
 
         var rewardIds = levels
-            .SelectMany(x => x.DefaultRewardIds.Concat(x.PremiumRewardIds).Concat(x.PlatinumRewardIds))
+            .SelectMany(x => x.DefaultRewardIds.Concat(x.PremiumRewardIds))
             .Distinct(StringComparer.Ordinal)
             .ToList();
         foreach (var rewardId in rewardIds)
@@ -415,7 +414,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             }
         }
 
-        if (await _productCatalogRepository.GetByIdAsync(season.GoldProductId, ct) is null ||
+        if (await _productCatalogRepository.GetByIdAsync(season.PremiumProductId, ct) is null ||
             await _productCatalogRepository.GetByIdAsync(season.PlatinumProductId, ct) is null)
         {
             return "Battle pass products must exist in catalog.";
@@ -443,14 +442,14 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
         var nowUtcMs = _clock.UtcNowUnixMilliseconds;
         await _productCatalogRepository.SaveAsync(new CatalogProductRecord
         {
-            ProductId = season.GoldProductId,
+            ProductId = season.PremiumProductId,
             Platform = PurchasePlatforms.GooglePlay,
             PurchaseType = PurchaseTypes.BattlePass,
             EntitlementType = EntitlementTypes.BattlePass,
             Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["seasonId"] = season.Id,
-                ["passType"] = BattlePassPassTypes.Gold
+                ["passType"] = BattlePassPassTypes.Premium
             },
             CreatedAtUtcMs = nowUtcMs,
             UpdatedAtUtcMs = nowUtcMs
@@ -479,7 +478,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
         string endAtUtc,
         int maxLevel,
         string configVersion,
-        string goldProductId,
+        string premiumProductId,
         string platinumProductId,
         string status,
         long createdAtUtcMs,
@@ -495,7 +494,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             string.IsNullOrWhiteSpace(startAtUtc) ||
             string.IsNullOrWhiteSpace(endAtUtc) ||
             string.IsNullOrWhiteSpace(configVersion) ||
-            string.IsNullOrWhiteSpace(goldProductId) ||
+            string.IsNullOrWhiteSpace(premiumProductId) ||
             string.IsNullOrWhiteSpace(platinumProductId) ||
             maxLevel <= 0)
         {
@@ -525,7 +524,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             MaxLevel = maxLevel,
             Status = status,
             ConfigVersion = configVersion,
-            GoldProductId = goldProductId,
+            PremiumProductId = premiumProductId,
             PlatinumProductId = platinumProductId,
             CreatedAtUtcMs = createdAtUtcMs,
             UpdatedAtUtcMs = updatedAtUtcMs

@@ -1,17 +1,8 @@
 namespace GameServer.Api.Models.Dto.BattlePass;
 
-public sealed class BattlePassRewardPartDto
-{
-    public string Kind { get; init; } = string.Empty;
-    public string TargetId { get; init; } = string.Empty;
-    public int Amount { get; init; }
-    public string? Category { get; init; }
-}
-
 public sealed class BattlePassRewardDto
 {
     public string RewardId { get; init; } = string.Empty;
-    public List<BattlePassRewardPartDto> Parts { get; init; } = [];
 }
 
 public sealed class BattlePassClaimedRewardDto
@@ -34,7 +25,6 @@ public sealed class BattlePassLevelDto
     public int XpRequired { get; init; }
     public List<BattlePassRewardDto> DefaultRewards { get; init; } = [];
     public List<BattlePassRewardDto> PremiumRewards { get; init; } = [];
-    public List<BattlePassRewardDto> PlatinumRewards { get; init; } = [];
 }
 
 public sealed class BattlePassSeasonDto
@@ -60,7 +50,7 @@ public sealed class BattlePassStateDto
 
 public sealed class BattlePassProductsDto
 {
-    public string GoldProductId { get; init; } = string.Empty;
+    public string PremiumProductId { get; init; } = string.Empty;
     public string PlatinumProductId { get; init; } = string.Empty;
 }
 

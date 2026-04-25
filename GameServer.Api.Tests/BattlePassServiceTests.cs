@@ -38,7 +38,7 @@ public sealed class BattlePassServiceTests
         Assert.NotNull(response.Season);
         Assert.NotNull(response.Products);
         Assert.NotNull(response.UserState);
-        Assert.Equal("battle_pass_gold_season_1", response.Products!.GoldProductId);
+        Assert.Equal("battle_pass_premium_season_1", response.Products!.PremiumProductId);
         Assert.Equal("battle_pass_platinum_season_1", response.Products.PlatinumProductId);
         Assert.Equal(BattlePassPassTypes.None, response.UserState!.PassType);
         Assert.Equal(1, response.UserState.Level);
@@ -254,7 +254,7 @@ public sealed class BattlePassServiceTests
         BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
         var entitlementRepository = new InMemoryEntitlementRepository();
         var entitlementService = new EntitlementService(entitlementRepository, new FixedClock(now), NullLogger<EntitlementService>.Instance);
-        await entitlementService.GrantBattlePassEntitlementAsync("p1", "season_1", BattlePassPassTypes.Gold, EntitlementSourceTypes.Admin, null, CancellationToken.None);
+        await entitlementService.GrantBattlePassEntitlementAsync("p1", "season_1", BattlePassPassTypes.Premium, EntitlementSourceTypes.Admin, null, CancellationToken.None);
         var rewardService = new RecordingRewardApplicationService();
         var service = new BattlePassService(
             playerRepository,

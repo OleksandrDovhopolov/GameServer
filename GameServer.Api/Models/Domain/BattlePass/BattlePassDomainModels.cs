@@ -12,7 +12,7 @@ public static class BattlePassSeasonStatuses
 public static class BattlePassPassTypes
 {
     public const string None = "none";
-    public const string Gold = "gold";
+    public const string Premium = "premium";
     public const string Platinum = "platinum";
 }
 
@@ -20,7 +20,6 @@ public static class BattlePassRewardTracks
 {
     public const string Default = "default";
     public const string Premium = "premium";
-    public const string Platinum = "platinum";
 }
 
 public static class EntitlementTypes
@@ -77,7 +76,7 @@ public sealed class BattlePassSeasonRecord
     public int MaxLevel { get; init; }
     public string Status { get; init; } = BattlePassSeasonStatuses.Draft;
     public string ConfigVersion { get; init; } = "v1";
-    public string GoldProductId { get; init; } = string.Empty;
+    public string PremiumProductId { get; init; } = string.Empty;
     public string PlatinumProductId { get; init; } = string.Empty;
     public long CreatedAtUtcMs { get; init; }
     public long UpdatedAtUtcMs { get; init; }
@@ -90,7 +89,6 @@ public sealed class BattlePassLevelRecord
     public int XpRequired { get; init; }
     public List<string> DefaultRewardIds { get; init; } = [];
     public List<string> PremiumRewardIds { get; init; } = [];
-    public List<string> PlatinumRewardIds { get; init; } = [];
 }
 
 public sealed class ClaimedBattlePassRewardRecord

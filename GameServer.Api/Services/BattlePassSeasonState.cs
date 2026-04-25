@@ -46,7 +46,7 @@ public static class BattlePassSeasonState
             MaxLevel = season.MaxLevel,
             Status = effectiveStatus,
             ConfigVersion = season.ConfigVersion,
-            GoldProductId = season.GoldProductId,
+            PremiumProductId = season.PremiumProductId,
             PlatinumProductId = season.PlatinumProductId,
             CreatedAtUtcMs = season.CreatedAtUtcMs,
             UpdatedAtUtcMs = nowUtcMs

@@ -422,7 +422,7 @@ public sealed class IapService : IIapService
             return true;
         }
 
-        if (string.Equals(currentPassType, BattlePassPassTypes.Gold, StringComparison.Ordinal))
+        if (string.Equals(currentPassType, BattlePassPassTypes.Premium, StringComparison.Ordinal))
         {
             return string.Equals(requestedPassType, BattlePassPassTypes.Platinum, StringComparison.Ordinal);
         }

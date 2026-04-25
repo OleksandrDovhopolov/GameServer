@@ -37,21 +37,21 @@ public sealed class IapServiceTests
         var productRepository = new InMemoryProductCatalogRepository();
         await productRepository.SaveAsync(new CatalogProductRecord
         {
-            ProductId = "battle_pass_gold_season_1",
+            ProductId = "battle_pass_premium_season_1",
             Platform = PurchasePlatforms.GooglePlay,
             PurchaseType = PurchaseTypes.BattlePass,
             EntitlementType = EntitlementTypes.BattlePass,
             Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["seasonId"] = "season_1",
-                ["passType"] = BattlePassPassTypes.Gold
+                ["passType"] = BattlePassPassTypes.Premium
             }
         }, CancellationToken.None);
         var verifier = new FakeGooglePlayPurchaseVerifier();
         verifier.SeedVerify("token_1", new GameServer.Api.Services.Interfaces.GooglePlayPurchaseVerificationResult
         {
             Success = true,
-            ProductId = "battle_pass_gold_season_1",
+            ProductId = "battle_pass_premium_season_1",
             PurchaseState = "purchased",
             IsAcknowledged = false,
             ProviderPayloadJson = "{}"
@@ -76,14 +76,14 @@ public sealed class IapServiceTests
         var first = await service.VerifyGooglePurchaseAsync(new VerifyGooglePurchaseRequest
         {
             PlayerId = "p1",
-            ProductId = "battle_pass_gold_season_1",
+            ProductId = "battle_pass_premium_season_1",
             PurchaseToken = "token_1",
             SeasonId = "season_1"
         }, CancellationToken.None);
         var second = await service.VerifyGooglePurchaseAsync(new VerifyGooglePurchaseRequest
         {
             PlayerId = "p1",
-            ProductId = "battle_pass_gold_season_1",
+            ProductId = "battle_pass_premium_season_1",
             PurchaseToken = "token_1",
             SeasonId = "season_1"
         }, CancellationToken.None);
@@ -91,7 +91,7 @@ public sealed class IapServiceTests
         Assert.True(first.Success);
         Assert.True(second.Success);
         Assert.Equal(PurchaseStatuses.Acknowledged, second.PurchaseStatus);
-        Assert.Equal(BattlePassPassTypes.Gold, second.BattlePass!.PassType);
+        Assert.Equal(BattlePassPassTypes.Premium, second.BattlePass!.PassType);
     }
 
     [Fact]
@@ -124,21 +124,21 @@ public sealed class IapServiceTests
         var productRepository = new InMemoryProductCatalogRepository();
         await productRepository.SaveAsync(new CatalogProductRecord
         {
-            ProductId = "battle_pass_gold_season_1",
+            ProductId = "battle_pass_premium_season_1",
             Platform = PurchasePlatforms.GooglePlay,
             PurchaseType = PurchaseTypes.BattlePass,
             EntitlementType = EntitlementTypes.BattlePass,
             Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["seasonId"] = "season_1",
-                ["passType"] = BattlePassPassTypes.Gold
+                ["passType"] = BattlePassPassTypes.Premium
             }
         }, CancellationToken.None);
         var verifier = new FakeGooglePlayPurchaseVerifier();
         verifier.SeedVerify("token_1", new GameServer.Api.Services.Interfaces.GooglePlayPurchaseVerificationResult
         {
             Success = true,
-            ProductId = "battle_pass_gold_season_1",
+            ProductId = "battle_pass_premium_season_1",
             PurchaseState = "purchased",
             ProviderPayloadJson = "{}"
         });
@@ -158,14 +158,14 @@ public sealed class IapServiceTests
         await service.VerifyGooglePurchaseAsync(new VerifyGooglePurchaseRequest
         {
             PlayerId = "p1",
-            ProductId = "battle_pass_gold_season_1",
+            ProductId = "battle_pass_premium_season_1",
             PurchaseToken = "token_1",
             SeasonId = "season_1"
         }, CancellationToken.None);
         var response = await service.VerifyGooglePurchaseAsync(new VerifyGooglePurchaseRequest
         {
             PlayerId = "p2",
-            ProductId = "battle_pass_gold_season_1",
+            ProductId = "battle_pass_premium_season_1",
             PurchaseToken = "token_1",
             SeasonId = "season_1"
         }, CancellationToken.None);
@@ -175,7 +175,7 @@ public sealed class IapServiceTests
     }
 
     [Fact]
-    public async Task VerifyGooglePurchaseAsync_UpgradesGoldToPlatinum()
+    public async Task VerifyGooglePurchaseAsync_UpgradesPremiumToPlatinum()
     {
         const long now = 1_750_000_000_000;
         var playerRepository = new InMemoryPlayerEconomyRepository();
@@ -189,7 +189,7 @@ public sealed class IapServiceTests
         var stateRepository = new InMemoryBattlePassStateRepository();
         var entitlementRepository = new InMemoryEntitlementRepository();
         var entitlementService = new EntitlementService(entitlementRepository, new FixedClock(now), NullLogger<EntitlementService>.Instance);
-        await entitlementService.GrantBattlePassEntitlementAsync("p1", "season_1", BattlePassPassTypes.Gold, EntitlementSourceTypes.Admin, null, CancellationToken.None);
+        await entitlementService.GrantBattlePassEntitlementAsync("p1", "season_1", BattlePassPassTypes.Premium, EntitlementSourceTypes.Admin, null, CancellationToken.None);
         var battlePassService = new BattlePassService(
             playerRepository,
             seasonRepository,

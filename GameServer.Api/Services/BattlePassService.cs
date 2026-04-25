@@ -15,8 +15,7 @@ public sealed class BattlePassService : IBattlePassService
     private static readonly string[] ClaimTrackOrder =
     [
         BattlePassRewardTracks.Default,
-        BattlePassRewardTracks.Premium,
-        BattlePassRewardTracks.Platinum
+        BattlePassRewardTracks.Premium
     ];
 
     private readonly IPlayerEconomyRepository _playerEconomyRepository;
@@ -83,7 +82,7 @@ public sealed class BattlePassService : IBattlePassService
             Season = ToSeasonDto(activeSeason),
             Products = new BattlePassProductsDto
             {
-                GoldProductId = activeSeason.GoldProductId,
+                PremiumProductId = activeSeason.PremiumProductId,
                 PlatinumProductId = activeSeason.PlatinumProductId
             },
             UserState = await BuildStateDtoAsync(playerId, activeSeason.Id, state, levels, passType, ct),
@@ -606,8 +605,7 @@ public sealed class BattlePassService : IBattlePassService
                 Level = level.Level,
                 XpRequired = level.XpRequired,
                 DefaultRewards = await BuildRewardDtosAsync(level.DefaultRewardIds, ct),
-                PremiumRewards = await BuildRewardDtosAsync(level.PremiumRewardIds, ct),
-                PlatinumRewards = await BuildRewardDtosAsync(level.PlatinumRewardIds, ct)
+                PremiumRewards = await BuildRewardDtosAsync(level.PremiumRewardIds, ct)
             });
         }
 
@@ -674,16 +672,7 @@ public sealed class BattlePassService : IBattlePassService
     {
         return new BattlePassRewardDto
         {
-            RewardId = definition.RewardId,
-            Parts = definition.Parts
-                .Select(x => new BattlePassRewardPartDto
-                {
-                    Kind = x.Kind.ToString(),
-                    TargetId = x.TargetId,
-                    Amount = x.Amount,
-                    Category = x.Category
-                })
-                .ToList()
+            RewardId = definition.RewardId
         };
     }
 
@@ -693,7 +682,6 @@ public sealed class BattlePassService : IBattlePassService
         {
             BattlePassRewardTracks.Default => level.DefaultRewardIds,
             BattlePassRewardTracks.Premium => level.PremiumRewardIds,
-            BattlePassRewardTracks.Platinum => level.PlatinumRewardIds,
             _ => []
         };
     }
@@ -709,13 +697,8 @@ public sealed class BattlePassService : IBattlePassService
 
         if (string.Equals(rewardTrack, BattlePassRewardTracks.Premium, StringComparison.Ordinal))
         {
-            return string.Equals(passType, BattlePassPassTypes.Gold, StringComparison.Ordinal) ||
+            return string.Equals(passType, BattlePassPassTypes.Premium, StringComparison.Ordinal) ||
                    string.Equals(passType, BattlePassPassTypes.Platinum, StringComparison.Ordinal);
-        }
-
-        if (string.Equals(rewardTrack, BattlePassRewardTracks.Platinum, StringComparison.Ordinal))
-        {
-            return string.Equals(passType, BattlePassPassTypes.Platinum, StringComparison.Ordinal);
         }
 
         return false;

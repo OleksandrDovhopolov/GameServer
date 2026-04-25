@@ -11,7 +11,7 @@ public sealed class CreateBattlePassSeasonRequest
     public string EndAtUtc { get; init; } = string.Empty;
     public int MaxLevel { get; init; }
     public string ConfigVersion { get; init; } = "v1";
-    public string GoldProductId { get; init; } = string.Empty;
+    public string PremiumProductId { get; init; } = string.Empty;
     public string PlatinumProductId { get; init; } = string.Empty;
 }
 
@@ -22,7 +22,7 @@ public sealed class UpdateBattlePassSeasonRequest
     public string EndAtUtc { get; init; } = string.Empty;
     public int MaxLevel { get; init; }
     public string ConfigVersion { get; init; } = "v1";
-    public string GoldProductId { get; init; } = string.Empty;
+    public string PremiumProductId { get; init; } = string.Empty;
     public string PlatinumProductId { get; init; } = string.Empty;
 }
 
@@ -32,7 +32,6 @@ public sealed class BattlePassLevelAdminRequest
     public int XpRequired { get; init; }
     public List<string> DefaultRewardIds { get; init; } = [];
     public List<string> PremiumRewardIds { get; init; } = [];
-    public List<string> PlatinumRewardIds { get; init; } = [];
 }
 
 public sealed class UpsertBattlePassLevelsRequest
