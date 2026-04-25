@@ -84,4 +84,60 @@ public sealed class BattlePassController : ControllerBase
             return NotFound(ex.Message);
         }
     }
+
+    [HttpPost("xp/add")]
+    public async Task<ActionResult<AddBattlePassXpResponse>> AddXp([FromBody] AddBattlePassXpRequest request, CancellationToken ct)
+    {
+        if (request is null)
+        {
+            return BadRequest(new AddBattlePassXpResponse
+            {
+                Success = false,
+                ErrorCode = BattlePassErrorCodes.ValidationError,
+                ErrorMessage = "Request body is required."
+            });
+        }
+
+        try
+        {
+            var state = await _battlePassService.AddXpToCurrentSeasonAsync(request.PlayerId, request.Amount, ct);
+            return Ok(new AddBattlePassXpResponse
+            {
+                Success = true,
+                AddedXp = request.Amount,
+                BattlePass = state
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new AddBattlePassXpResponse
+            {
+                Success = false,
+                ErrorCode = BattlePassErrorCodes.ValidationError,
+                ErrorMessage = ex.Message
+            });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new AddBattlePassXpResponse
+            {
+                Success = false,
+                ErrorCode = BattlePassErrorCodes.PlayerNotFound,
+                ErrorMessage = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            var errorCode = string.Equals(ex.Message, "No active battle pass season is available.", StringComparison.Ordinal)
+                ? BattlePassErrorCodes.NoActiveSeason
+                : BattlePassErrorCodes.SeasonNotActive;
+
+            return StatusCode(StatusCodes.Status409Conflict, new AddBattlePassXpResponse
+            {
+                Success = false,
+                ErrorCode = errorCode,
+                ErrorMessage = ex.Message
+            });
+        }
+    }
 }

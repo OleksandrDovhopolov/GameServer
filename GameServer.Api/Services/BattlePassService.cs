@@ -9,6 +9,9 @@ namespace GameServer.Api.Services;
 
 public sealed class BattlePassService : IBattlePassService
 {
+    private const string CheatXpSource = "cheat";
+    private const string NoActiveSeasonMessage = "No active battle pass season is available.";
+
     private static readonly string[] ClaimTrackOrder =
     [
         BattlePassRewardTracks.Default,
@@ -303,6 +306,27 @@ public sealed class BattlePassService : IBattlePassService
         var passType = await _entitlementService.GetBattlePassPassTypeAsync(playerId, season.Id, nowUtcMs, ct);
 
         return await BuildStateDtoAsync(playerId, season.Id, state, levels, passType, ct);
+    }
+
+    public async Task<BattlePassStateDto> AddXpToCurrentSeasonAsync(string playerId, int amount, CancellationToken ct = default)
+    {
+        ValidatePlayerId(playerId);
+        if (amount <= 0)
+        {
+            throw new ArgumentException("amount must be positive.");
+        }
+
+        await EnsurePlayerExistsAsync(playerId, ct);
+
+        var nowUtcMs = _clock.UtcNowUnixMilliseconds;
+        var seasons = await LoadNormalizedSeasonsAsync(nowUtcMs, ct);
+        var activeSeason = seasons.FirstOrDefault(x => string.Equals(x.Status, BattlePassSeasonStatuses.Active, StringComparison.Ordinal));
+        if (activeSeason is null)
+        {
+            throw new InvalidOperationException(NoActiveSeasonMessage);
+        }
+
+        return await AddXpAsync(playerId, activeSeason.Id, amount, CheatXpSource, ct);
     }
 
     public async Task<BattlePassStateDto> AddXpAsync(string playerId, string seasonId, int amount, string source, CancellationToken ct = default)

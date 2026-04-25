@@ -4,6 +4,7 @@ public static class BattlePassErrorCodes
 {
     public const string ValidationError = "VALIDATION_ERROR";
     public const string PlayerNotFound = "PLAYER_NOT_FOUND";
+    public const string NoActiveSeason = "NO_ACTIVE_SEASON";
     public const string SeasonNotFound = "SEASON_NOT_FOUND";
     public const string SeasonNotActive = "SEASON_NOT_ACTIVE";
     public const string SeasonNotPurchasable = "SEASON_NOT_PURCHASABLE";

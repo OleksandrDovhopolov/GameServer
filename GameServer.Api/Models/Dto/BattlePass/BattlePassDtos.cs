@@ -112,10 +112,25 @@ public sealed class ClaimAllBattlePassRewardsRequest
     public string SeasonId { get; init; } = string.Empty;
 }
 
+public sealed class AddBattlePassXpRequest
+{
+    public string PlayerId { get; init; } = string.Empty;
+    public int Amount { get; init; }
+}
+
 public sealed class BattlePassClaimResponse
 {
     public bool Success { get; init; }
     public List<BattlePassRewardDto> GrantedRewards { get; init; } = [];
+    public BattlePassStateDto? BattlePass { get; init; }
+    public string? ErrorCode { get; init; }
+    public string? ErrorMessage { get; init; }
+}
+
+public sealed class AddBattlePassXpResponse
+{
+    public bool Success { get; init; }
+    public int AddedXp { get; init; }
     public BattlePassStateDto? BattlePass { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }

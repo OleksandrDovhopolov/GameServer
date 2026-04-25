@@ -116,6 +116,121 @@ public sealed class BattlePassServiceTests
     }
 
     [Fact]
+    public async Task AddXpToCurrentSeasonAsync_AddsXpToActiveSeason()
+    {
+        const long now = 1_750_000_000_000;
+        var playerRepository = new InMemoryPlayerEconomyRepository();
+        playerRepository.Seed("p1");
+        var seasonRepository = new InMemoryBattlePassSeasonRepository();
+        var season = BattlePassTestFactory.CreateSeason("season_1", now - 10_000, now + 10_000);
+        await seasonRepository.SaveAsync(season, CancellationToken.None);
+        await seasonRepository.SaveLevelsAsync(season.Id, BattlePassTestFactory.CreateLevels(season.Id), CancellationToken.None);
+        var rewardDefinitions = new InMemoryRewardDefinitionRepository();
+        BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
+        var entitlementService = new EntitlementService(new InMemoryEntitlementRepository(), new FixedClock(now), NullLogger<EntitlementService>.Instance);
+        var service = new BattlePassService(
+            playerRepository,
+            seasonRepository,
+            new InMemoryBattlePassStateRepository(),
+            entitlementService,
+            rewardDefinitions,
+            new RecordingRewardApplicationService(),
+            new NoOpDistributedLockService(),
+            new FixedClock(now),
+            new StaticLiveOpsScheduleItemProvider(),
+            NullLogger<BattlePassService>.Instance);
+
+        var state = await service.AddXpToCurrentSeasonAsync("p1", 20, CancellationToken.None);
+
+        Assert.Equal("season_1", state.SeasonId);
+        Assert.Equal(20, state.Xp);
+    }
+
+    [Fact]
+    public async Task AddXpToCurrentSeasonAsync_WhenNoActiveSeason_ThrowsInvalidOperationException()
+    {
+        const long now = 1_750_000_000_000;
+        var playerRepository = new InMemoryPlayerEconomyRepository();
+        playerRepository.Seed("p1");
+        var seasonRepository = new InMemoryBattlePassSeasonRepository();
+        var season = BattlePassTestFactory.CreateSeason(
+            "season_1",
+            now + 10_000,
+            now + 20_000,
+            status: BattlePassSeasonStatuses.Scheduled);
+        await seasonRepository.SaveAsync(season, CancellationToken.None);
+        await seasonRepository.SaveLevelsAsync(season.Id, BattlePassTestFactory.CreateLevels(season.Id), CancellationToken.None);
+        var rewardDefinitions = new InMemoryRewardDefinitionRepository();
+        BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
+        var entitlementService = new EntitlementService(new InMemoryEntitlementRepository(), new FixedClock(now), NullLogger<EntitlementService>.Instance);
+        var service = new BattlePassService(
+            playerRepository,
+            seasonRepository,
+            new InMemoryBattlePassStateRepository(),
+            entitlementService,
+            rewardDefinitions,
+            new RecordingRewardApplicationService(),
+            new NoOpDistributedLockService(),
+            new FixedClock(now),
+            new StaticLiveOpsScheduleItemProvider(),
+            NullLogger<BattlePassService>.Instance);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => service.AddXpToCurrentSeasonAsync("p1", 20, CancellationToken.None));
+
+        Assert.Equal("No active battle pass season is available.", exception.Message);
+    }
+
+    [Fact]
+    public async Task AddXpToCurrentSeasonAsync_WhenPlayerMissing_ThrowsKeyNotFoundException()
+    {
+        const long now = 1_750_000_000_000;
+        var seasonRepository = new InMemoryBattlePassSeasonRepository();
+        var season = BattlePassTestFactory.CreateSeason("season_1", now - 10_000, now + 10_000);
+        await seasonRepository.SaveAsync(season, CancellationToken.None);
+        await seasonRepository.SaveLevelsAsync(season.Id, BattlePassTestFactory.CreateLevels(season.Id), CancellationToken.None);
+        var rewardDefinitions = new InMemoryRewardDefinitionRepository();
+        BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
+        var entitlementService = new EntitlementService(new InMemoryEntitlementRepository(), new FixedClock(now), NullLogger<EntitlementService>.Instance);
+        var service = new BattlePassService(
+            new InMemoryPlayerEconomyRepository(),
+            seasonRepository,
+            new InMemoryBattlePassStateRepository(),
+            entitlementService,
+            rewardDefinitions,
+            new RecordingRewardApplicationService(),
+            new NoOpDistributedLockService(),
+            new FixedClock(now),
+            new StaticLiveOpsScheduleItemProvider(),
+            NullLogger<BattlePassService>.Instance);
+
+        await Assert.ThrowsAsync<KeyNotFoundException>(() => service.AddXpToCurrentSeasonAsync("missing", 20, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AddXpToCurrentSeasonAsync_WhenAmountInvalid_ThrowsArgumentException()
+    {
+        const long now = 1_750_000_000_000;
+        var playerRepository = new InMemoryPlayerEconomyRepository();
+        playerRepository.Seed("p1");
+        var rewardDefinitions = new InMemoryRewardDefinitionRepository();
+        BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
+        var entitlementService = new EntitlementService(new InMemoryEntitlementRepository(), new FixedClock(now), NullLogger<EntitlementService>.Instance);
+        var service = new BattlePassService(
+            playerRepository,
+            new InMemoryBattlePassSeasonRepository(),
+            new InMemoryBattlePassStateRepository(),
+            entitlementService,
+            rewardDefinitions,
+            new RecordingRewardApplicationService(),
+            new NoOpDistributedLockService(),
+            new FixedClock(now),
+            new StaticLiveOpsScheduleItemProvider(),
+            NullLogger<BattlePassService>.Instance);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.AddXpToCurrentSeasonAsync("p1", 0, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ClaimAllAsync_UsesRewardServiceAndMarksClaims()
     {
         const long now = 1_750_000_000_000;

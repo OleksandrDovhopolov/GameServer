@@ -65,10 +65,99 @@ public sealed class BattlePassControllerTests
         Assert.IsType<OkObjectResult>(result.Result);
     }
 
+    [Fact]
+    public async Task AddXp_WhenSuccess_ReturnsOk()
+    {
+        var controller = new BattlePassController(new StubBattlePassService
+        {
+            AddXpToCurrentSeasonResponse = new BattlePassStateDto
+            {
+                SeasonId = "season_1",
+                Xp = 20,
+                PassType = "none"
+            }
+        });
+
+        var result = await controller.AddXp(new AddBattlePassXpRequest
+        {
+            PlayerId = "p1",
+            Amount = 20
+        }, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<AddBattlePassXpResponse>(ok.Value);
+        Assert.True(response.Success);
+        Assert.Equal(20, response.AddedXp);
+        Assert.Equal("season_1", response.BattlePass!.SeasonId);
+    }
+
+    [Fact]
+    public async Task AddXp_WhenValidationFails_ReturnsBadRequest()
+    {
+        var controller = new BattlePassController(new StubBattlePassService
+        {
+            AddXpException = new ArgumentException("amount must be positive.")
+        });
+
+        var result = await controller.AddXp(new AddBattlePassXpRequest
+        {
+            PlayerId = "p1",
+            Amount = 0
+        }, CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var response = Assert.IsType<AddBattlePassXpResponse>(badRequest.Value);
+        Assert.False(response.Success);
+        Assert.Equal(GameServer.Api.Services.BattlePassErrorCodes.ValidationError, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task AddXp_WhenPlayerMissing_ReturnsNotFound()
+    {
+        var controller = new BattlePassController(new StubBattlePassService
+        {
+            AddXpException = new KeyNotFoundException("missing")
+        });
+
+        var result = await controller.AddXp(new AddBattlePassXpRequest
+        {
+            PlayerId = "p1",
+            Amount = 20
+        }, CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result.Result);
+        var response = Assert.IsType<AddBattlePassXpResponse>(notFound.Value);
+        Assert.False(response.Success);
+        Assert.Equal(GameServer.Api.Services.BattlePassErrorCodes.PlayerNotFound, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task AddXp_WhenNoActiveSeason_ReturnsConflict()
+    {
+        var controller = new BattlePassController(new StubBattlePassService
+        {
+            AddXpException = new InvalidOperationException("No active battle pass season is available.")
+        });
+
+        var result = await controller.AddXp(new AddBattlePassXpRequest
+        {
+            PlayerId = "p1",
+            Amount = 20
+        }, CancellationToken.None);
+
+        var conflict = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(409, conflict.StatusCode);
+        var response = Assert.IsType<AddBattlePassXpResponse>(conflict.Value);
+        Assert.False(response.Success);
+        Assert.Equal(GameServer.Api.Services.BattlePassErrorCodes.NoActiveSeason, response.ErrorCode);
+    }
+
     private sealed class StubBattlePassService : IBattlePassService
     {
         public Exception? CurrentException { get; init; }
         public BattlePassClaimResponse ClaimResponse { get; init; } = new() { Success = true };
+        public BattlePassStateDto AddXpToCurrentSeasonResponse { get; init; } = new() { SeasonId = "season_1" };
+        public Exception? AddXpException { get; init; }
 
         public Task<BattlePassCurrentResponse> GetCurrentAsync(string playerId, CancellationToken ct = default)
         {
@@ -88,6 +177,16 @@ public sealed class BattlePassControllerTests
 
         public Task<BattlePassStateDto> GetSeasonStateAsync(string playerId, string seasonId, CancellationToken ct = default)
             => Task.FromResult(new BattlePassStateDto { SeasonId = seasonId });
+
+        public Task<BattlePassStateDto> AddXpToCurrentSeasonAsync(string playerId, int amount, CancellationToken ct = default)
+        {
+            if (AddXpException is not null)
+            {
+                throw AddXpException;
+            }
+
+            return Task.FromResult(AddXpToCurrentSeasonResponse);
+        }
 
         public Task<BattlePassStateDto> AddXpAsync(string playerId, string seasonId, int amount, string source, CancellationToken ct = default)
             => Task.FromResult(new BattlePassStateDto { SeasonId = seasonId });
