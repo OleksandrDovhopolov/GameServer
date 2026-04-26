@@ -25,7 +25,7 @@ public sealed class RedisBattlePassSeasonRepository : IBattlePassSeasonRepositor
     {
         ct.ThrowIfCancellationRequested();
         var raw = await _database.StringGetAsync(GetSeasonKey(seasonId)).WaitAsync(ct);
-        return Deserialize<BattlePassSeasonRecord>(raw);
+        return DeserializeSeason(raw);
     }
 
     public async Task<IReadOnlyList<BattlePassSeasonRecord>> GetAllAsync(CancellationToken ct)
@@ -39,7 +39,7 @@ public sealed class RedisBattlePassSeasonRepository : IBattlePassSeasonRepositor
 
         var values = await _database.StringGetAsync(ids.Select(x => (RedisKey)GetSeasonKey(x!)).ToArray()).WaitAsync(ct);
         return values
-            .Select(Deserialize<BattlePassSeasonRecord>)
+            .Select(DeserializeSeason)
             .Where(x => x is not null)
             .Cast<BattlePassSeasonRecord>()
             .ToList();
@@ -79,6 +79,37 @@ public sealed class RedisBattlePassSeasonRepository : IBattlePassSeasonRepositor
         }
 
         return JsonSerializer.Deserialize<T>(raw!, JsonOptions);
+    }
+
+    private static BattlePassSeasonRecord? DeserializeSeason(RedisValue raw)
+    {
+        var season = Deserialize<BattlePassSeasonRecord>(raw);
+        if (season is null || !string.IsNullOrWhiteSpace(season.PremiumProductId) || raw.IsNullOrEmpty)
+        {
+            return season;
+        }
+
+        using var document = JsonDocument.Parse((string)raw!);
+        if (!document.RootElement.TryGetProperty("GoldProductId", out var legacyGoldProductId) ||
+            string.IsNullOrWhiteSpace(legacyGoldProductId.GetString()))
+        {
+            return season;
+        }
+
+        return new BattlePassSeasonRecord
+        {
+            Id = season.Id,
+            Title = season.Title,
+            StartAtUtcMs = season.StartAtUtcMs,
+            EndAtUtcMs = season.EndAtUtcMs,
+            MaxLevel = season.MaxLevel,
+            Status = season.Status,
+            ConfigVersion = season.ConfigVersion,
+            PremiumProductId = legacyGoldProductId.GetString() ?? string.Empty,
+            PlatinumProductId = season.PlatinumProductId,
+            CreatedAtUtcMs = season.CreatedAtUtcMs,
+            UpdatedAtUtcMs = season.UpdatedAtUtcMs
+        };
     }
 }
 

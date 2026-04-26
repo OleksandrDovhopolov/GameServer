@@ -1,5 +1,4 @@
 using GameServer.Api.Models.Domain.BattlePass;
-using GameServer.Api.Models.Domain.Rewards;
 using GameServer.Api.Models.Dto.BattlePass;
 using GameServer.Api.Models.Dto.Rewards;
 using GameServer.Api.Repositories.Interfaces;
@@ -182,9 +181,13 @@ public sealed class BattlePassService : IBattlePassService
             return BuildClaimFailure("Reward was already claimed.", BattlePassErrorCodes.RewardAlreadyClaimed);
         }
 
-        var rewardIds = GetRewardIds(level, request.RewardTrack);
-        var rewards = await BuildRewardDtosAsync(rewardIds, ct);
-        var grantResult = await GrantRewardsAsync(request.PlayerId, rewardIds, ct);
+        var rewardId = GetRewardId(level, request.RewardTrack);
+        if (string.IsNullOrWhiteSpace(rewardId))
+        {
+            return BuildClaimFailure("Requested reward track has no reward configured.", BattlePassErrorCodes.ValidationError);
+        }
+
+        var grantResult = await GrantRewardAsync(request.PlayerId, rewardId, ct);
         if (!grantResult.Success)
         {
             return BuildClaimFailure(grantResult.ErrorMessage ?? "Reward grant failed.", grantResult.ErrorCode ?? RewardErrorCodes.RewardApplicationFailed);
@@ -214,7 +217,15 @@ public sealed class BattlePassService : IBattlePassService
         return new BattlePassClaimResponse
         {
             Success = true,
-            GrantedRewards = rewards,
+            GrantedRewards =
+            [
+                new BattlePassGrantedRewardDto
+                {
+                    Level = request.Level,
+                    RewardTrack = request.RewardTrack,
+                    RewardId = rewardId
+                }
+            ],
             BattlePass = await BuildStateDtoAsync(request.PlayerId, season.Id, updatedState, levels, passType, ct)
         };
     }
@@ -250,18 +261,22 @@ public sealed class BattlePassService : IBattlePassService
         var passType = await _entitlementService.GetBattlePassPassTypeAsync(request.PlayerId, season.Id, nowUtcMs, ct);
         var claimableRewards = await BuildClaimableRewardsAsync(state, levels, passType, ct);
 
-        var grantedRewards = new List<BattlePassRewardDto>();
+        var grantedRewards = new List<BattlePassGrantedRewardDto>();
         var claimedRecords = state.ClaimedRewards.ToList();
         foreach (var claimableReward in claimableRewards)
         {
-            var rewardIds = claimableReward.Rewards.Select(x => x.RewardId).ToList();
-            var grantResult = await GrantRewardsAsync(request.PlayerId, rewardIds, ct);
+            var grantResult = await GrantRewardAsync(request.PlayerId, claimableReward.RewardId, ct);
             if (!grantResult.Success)
             {
                 return BuildClaimFailure(grantResult.ErrorMessage ?? "Reward grant failed.", grantResult.ErrorCode ?? RewardErrorCodes.RewardApplicationFailed);
             }
 
-            grantedRewards.AddRange(claimableReward.Rewards);
+            grantedRewards.Add(new BattlePassGrantedRewardDto
+            {
+                Level = claimableReward.Level,
+                RewardTrack = claimableReward.RewardTrack,
+                RewardId = claimableReward.RewardId
+            });
             claimedRecords.Add(new ClaimedBattlePassRewardRecord
             {
                 Key = BuildClaimKey(claimableReward.Level, claimableReward.RewardTrack),
@@ -554,12 +569,13 @@ public sealed class BattlePassService : IBattlePassService
         };
     }
 
-    private async Task<List<BattlePassClaimableRewardDto>> BuildClaimableRewardsAsync(
+    private Task<List<BattlePassClaimableRewardDto>> BuildClaimableRewardsAsync(
         UserBattlePassRecord state,
         IReadOnlyList<BattlePassLevelRecord> levels,
         string passType,
         CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var claimableRewards = new List<BattlePassClaimableRewardDto>();
         var claimed = new HashSet<string>(state.ClaimedRewards.Select(x => x.Key), StringComparer.Ordinal);
         foreach (var level in levels.Where(x => x.Level <= state.Level))
@@ -577,8 +593,8 @@ public sealed class BattlePassService : IBattlePassService
                     continue;
                 }
 
-                var rewardIds = GetRewardIds(level, track);
-                if (rewardIds.Count == 0)
+                var rewardId = GetRewardId(level, track);
+                if (string.IsNullOrWhiteSpace(rewardId))
                 {
                     continue;
                 }
@@ -587,16 +603,17 @@ public sealed class BattlePassService : IBattlePassService
                 {
                     Level = level.Level,
                     RewardTrack = track,
-                    Rewards = await BuildRewardDtosAsync(rewardIds, ct)
+                    RewardId = rewardId
                 });
             }
         }
 
-        return claimableRewards;
+        return Task.FromResult(claimableRewards);
     }
 
-    private async Task<List<BattlePassLevelDto>> BuildLevelDtosAsync(IReadOnlyList<BattlePassLevelRecord> levels, CancellationToken ct)
+    private Task<List<BattlePassLevelDto>> BuildLevelDtosAsync(IReadOnlyList<BattlePassLevelRecord> levels, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var result = new List<BattlePassLevelDto>(levels.Count);
         foreach (var level in levels)
         {
@@ -604,54 +621,22 @@ public sealed class BattlePassService : IBattlePassService
             {
                 Level = level.Level,
                 XpRequired = level.XpRequired,
-                DefaultRewards = await BuildRewardDtosAsync(level.DefaultRewardIds, ct),
-                PremiumRewards = await BuildRewardDtosAsync(level.PremiumRewardIds, ct)
+                DefaultRewardId = level.DefaultRewardId,
+                PremiumRewardId = level.PremiumRewardId
             });
         }
 
-        return result;
+        return Task.FromResult(result);
     }
 
-    private async Task<List<BattlePassRewardDto>> BuildRewardDtosAsync(IEnumerable<string> rewardIds, CancellationToken ct)
+    private Task<GrantRewardResponse> GrantRewardAsync(string playerId, string rewardId, CancellationToken ct)
     {
-        var rewards = new List<BattlePassRewardDto>();
-        foreach (var rewardId in rewardIds.Distinct(StringComparer.Ordinal))
+        return _rewardApplicationService.GrantAsync(new GrantRewardCommand
         {
-            var definition = await _rewardDefinitionRepository.GetByIdAsync(rewardId, ct);
-            if (definition is null)
-            {
-                throw new InvalidOperationException($"Reward definition '{rewardId}' was not found.");
-            }
-
-            rewards.Add(ToRewardDto(definition));
-        }
-
-        return rewards;
-    }
-
-    private async Task<GrantRewardResponse> GrantRewardsAsync(string playerId, IEnumerable<string> rewardIds, CancellationToken ct)
-    {
-        GrantRewardResponse? lastResponse = null;
-        foreach (var rewardId in rewardIds)
-        {
-            lastResponse = await _rewardApplicationService.GrantAsync(new GrantRewardCommand
-            {
-                PlayerId = playerId,
-                RewardSource = EntitlementTypes.BattlePass,
-                RewardId = rewardId
-            }, ct);
-
-            if (!lastResponse.Success)
-            {
-                return lastResponse;
-            }
-        }
-
-        return lastResponse ?? new GrantRewardResponse
-        {
-            Success = true,
-            RewardId = string.Empty
-        };
+            PlayerId = playerId,
+            RewardSource = EntitlementTypes.BattlePass,
+            RewardId = rewardId
+        }, ct);
     }
 
     private static BattlePassSeasonDto ToSeasonDto(BattlePassSeasonRecord season)
@@ -668,21 +653,13 @@ public sealed class BattlePassService : IBattlePassService
         };
     }
 
-    private static BattlePassRewardDto ToRewardDto(RewardDefinition definition)
-    {
-        return new BattlePassRewardDto
-        {
-            RewardId = definition.RewardId
-        };
-    }
-
-    private static List<string> GetRewardIds(BattlePassLevelRecord level, string rewardTrack)
+    private static string GetRewardId(BattlePassLevelRecord level, string rewardTrack)
     {
         return rewardTrack switch
         {
-            BattlePassRewardTracks.Default => level.DefaultRewardIds,
-            BattlePassRewardTracks.Premium => level.PremiumRewardIds,
-            _ => []
+            BattlePassRewardTracks.Default => level.DefaultRewardId,
+            BattlePassRewardTracks.Premium => level.PremiumRewardId,
+            _ => string.Empty
         };
     }
 

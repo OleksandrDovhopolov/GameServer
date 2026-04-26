@@ -87,8 +87,8 @@ public sealed class BattlePassLevelRecord
     public string SeasonId { get; init; } = string.Empty;
     public int Level { get; init; }
     public int XpRequired { get; init; }
-    public List<string> DefaultRewardIds { get; init; } = [];
-    public List<string> PremiumRewardIds { get; init; } = [];
+    public string DefaultRewardId { get; init; } = string.Empty;
+    public string PremiumRewardId { get; init; } = string.Empty;
 }
 
 public sealed class ClaimedBattlePassRewardRecord

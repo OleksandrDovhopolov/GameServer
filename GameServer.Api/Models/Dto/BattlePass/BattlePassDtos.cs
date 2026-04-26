@@ -1,10 +1,5 @@
 namespace GameServer.Api.Models.Dto.BattlePass;
 
-public sealed class BattlePassRewardDto
-{
-    public string RewardId { get; init; } = string.Empty;
-}
-
 public sealed class BattlePassClaimedRewardDto
 {
     public int Level { get; init; }
@@ -16,15 +11,15 @@ public sealed class BattlePassClaimableRewardDto
 {
     public int Level { get; init; }
     public string RewardTrack { get; init; } = string.Empty;
-    public List<BattlePassRewardDto> Rewards { get; init; } = [];
+    public string RewardId { get; init; } = string.Empty;
 }
 
 public sealed class BattlePassLevelDto
 {
     public int Level { get; init; }
     public int XpRequired { get; init; }
-    public List<BattlePassRewardDto> DefaultRewards { get; init; } = [];
-    public List<BattlePassRewardDto> PremiumRewards { get; init; } = [];
+    public string DefaultRewardId { get; init; } = string.Empty;
+    public string PremiumRewardId { get; init; } = string.Empty;
 }
 
 public sealed class BattlePassSeasonDto
@@ -111,10 +106,17 @@ public sealed class AddBattlePassXpRequest
 public sealed class BattlePassClaimResponse
 {
     public bool Success { get; init; }
-    public List<BattlePassRewardDto> GrantedRewards { get; init; } = [];
+    public List<BattlePassGrantedRewardDto> GrantedRewards { get; init; } = [];
     public BattlePassStateDto? BattlePass { get; init; }
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
+}
+
+public sealed class BattlePassGrantedRewardDto
+{
+    public int Level { get; init; }
+    public string RewardTrack { get; init; } = string.Empty;
+    public string RewardId { get; init; } = string.Empty;
 }
 
 public sealed class AddBattlePassXpResponse

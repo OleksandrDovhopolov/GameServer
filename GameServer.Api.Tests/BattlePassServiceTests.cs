@@ -42,6 +42,9 @@ public sealed class BattlePassServiceTests
         Assert.Equal("battle_pass_platinum_season_1", response.Products.PlatinumProductId);
         Assert.Equal(BattlePassPassTypes.None, response.UserState!.PassType);
         Assert.Equal(1, response.UserState.Level);
+        Assert.Equal("reward_default_1", response.Levels[0].DefaultRewardId);
+        Assert.Equal("reward_premium_1", response.Levels[0].PremiumRewardId);
+        Assert.Equal("reward_default_1", response.UserState.ClaimableRewards[0].RewardId);
         var storedState = await stateRepository.GetAsync("p1", "season_1", CancellationToken.None);
         Assert.NotNull(storedState);
         Assert.Equal(1, storedState!.Level);
@@ -277,5 +280,8 @@ public sealed class BattlePassServiceTests
         Assert.True(response.Success);
         Assert.Equal(4, rewardService.GrantedRewardIds.Count);
         Assert.Equal(4, response.BattlePass!.ClaimedRewards.Count);
+        Assert.Equal(4, response.GrantedRewards.Count);
+        Assert.Contains(response.GrantedRewards, x => x.Level == 1 && x.RewardTrack == BattlePassRewardTracks.Default && x.RewardId == "reward_default_1");
+        Assert.Contains(response.GrantedRewards, x => x.Level == 1 && x.RewardTrack == BattlePassRewardTracks.Premium && x.RewardId == "reward_premium_1");
     }
 }

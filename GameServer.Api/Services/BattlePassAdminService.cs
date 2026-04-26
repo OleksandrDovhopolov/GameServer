@@ -143,8 +143,8 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
                 SeasonId = seasonId,
                 Level = x.Level,
                 XpRequired = x.XpRequired,
-                DefaultRewardIds = x.DefaultRewardIds.Distinct(StringComparer.Ordinal).ToList(),
-                PremiumRewardIds = x.PremiumRewardIds.Distinct(StringComparer.Ordinal).ToList()
+                DefaultRewardId = x.DefaultRewardId.Trim(),
+                PremiumRewardId = x.PremiumRewardId.Trim()
             })
             .ToList();
 
@@ -402,7 +402,8 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
         }
 
         var rewardIds = levels
-            .SelectMany(x => x.DefaultRewardIds.Concat(x.PremiumRewardIds))
+            .SelectMany(x => new[] { x.DefaultRewardId, x.PremiumRewardId })
+            .Where(x => !string.IsNullOrWhiteSpace(x))
             .Distinct(StringComparer.Ordinal)
             .ToList();
         foreach (var rewardId in rewardIds)
@@ -418,6 +419,11 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             await _productCatalogRepository.GetByIdAsync(season.PlatinumProductId, ct) is null)
         {
             return "Battle pass products must exist in catalog.";
+        }
+
+        if (levels.Any(x => string.IsNullOrWhiteSpace(x.DefaultRewardId)))
+        {
+            return "Each level must define defaultRewardId.";
         }
 
         var otherPublishedSeasons = (await _seasonRepository.GetAllAsync(ct))

@@ -39,3 +39,8 @@ Content-Type: application/json
 }
 
 ###
+
+GET {{GameServer.Api_HostAddress}}/api/v1/battle-pass/current?playerId=test-player-1
+Accept: application/json
+
+###

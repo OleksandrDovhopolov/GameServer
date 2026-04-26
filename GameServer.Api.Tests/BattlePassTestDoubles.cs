@@ -437,16 +437,16 @@ internal static class BattlePassTestFactory
                 SeasonId = seasonId,
                 Level = 1,
                 XpRequired = 0,
-                DefaultRewardIds = ["reward_default_1"],
-                PremiumRewardIds = ["reward_premium_1"]
+                DefaultRewardId = "reward_default_1",
+                PremiumRewardId = "reward_premium_1"
             },
             new BattlePassLevelRecord
             {
                 SeasonId = seasonId,
                 Level = 2,
                 XpRequired = 100,
-                DefaultRewardIds = ["reward_default_2"],
-                PremiumRewardIds = ["reward_premium_2"]
+                DefaultRewardId = "reward_default_2",
+                PremiumRewardId = "reward_premium_2"
             }
         ];
     }
