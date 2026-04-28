@@ -16,7 +16,7 @@
     "Id": "Spring_Collection",
     "EventType": "CardCollection",
     "StartTimeUtc": "2026-04-27T22:25:43.4664352+00:00",
-    "EndTimeUtc": "2026-04-27T22:34:03.4664352+00:00",
+    "EndTimeUtc": "2026-05-27T22:34:03.4664352+00:00",
     "Priority": 10,
     "StreamId": "card_collection_seasons",
     "CustomParams": {

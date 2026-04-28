@@ -41,13 +41,14 @@ public sealed class BattlePassServiceTests
         Assert.Equal("battle_pass_premium_season_1", response.Products!.PremiumProductId);
         Assert.Equal("battle_pass_platinum_season_1", response.Products.PlatinumProductId);
         Assert.Equal(BattlePassPassTypes.None, response.UserState!.PassType);
-        Assert.Equal(1, response.UserState.Level);
-        Assert.Equal("reward_default_1", response.Levels[0].DefaultRewardId);
-        Assert.Equal("reward_premium_1", response.Levels[0].PremiumRewardId);
-        Assert.Equal("reward_default_1", response.UserState.ClaimableRewards[0].RewardId);
+        Assert.Equal(0, response.UserState.Level);
+        Assert.Equal("Gems", response.Levels[0].DefaultRewardId);
+        Assert.Null(response.Levels[0].PremiumRewardId);
+        Assert.Equal("Gems", response.UserState.ClaimableRewards[0].RewardId);
+        Assert.DoesNotContain(response.UserState.ClaimableRewards, x => x.Level == 0 && x.RewardTrack == BattlePassRewardTracks.Premium);
         var storedState = await stateRepository.GetAsync("p1", "season_1", CancellationToken.None);
         Assert.NotNull(storedState);
-        Assert.Equal(1, storedState!.Level);
+        Assert.Equal(0, storedState!.Level);
     }
 
     [Fact]
@@ -79,12 +80,52 @@ public sealed class BattlePassServiceTests
         {
             PlayerId = "p1",
             SeasonId = "season_1",
-            Level = 1,
+            Level = 0,
             RewardTrack = BattlePassRewardTracks.Premium
         }, CancellationToken.None);
 
         Assert.False(response.Success);
         Assert.Equal(BattlePassErrorCodes.RewardTrackNotAllowed, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task ClaimAsync_AllowsDefaultTrackAtLevelZero()
+    {
+        const long now = 1_750_000_000_000;
+        var playerRepository = new InMemoryPlayerEconomyRepository();
+        playerRepository.Seed("p1");
+        var seasonRepository = new InMemoryBattlePassSeasonRepository();
+        var season = BattlePassTestFactory.CreateSeason("season_1", now - 10_000, now + 10_000);
+        await seasonRepository.SaveAsync(season, CancellationToken.None);
+        await seasonRepository.SaveLevelsAsync(season.Id, BattlePassTestFactory.CreateLevels(season.Id), CancellationToken.None);
+        var rewardDefinitions = new InMemoryRewardDefinitionRepository();
+        BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
+        var entitlementService = new EntitlementService(new InMemoryEntitlementRepository(), new FixedClock(now), NullLogger<EntitlementService>.Instance);
+        var rewardService = new RecordingRewardApplicationService();
+        var service = new BattlePassService(
+            playerRepository,
+            seasonRepository,
+            new InMemoryBattlePassStateRepository(),
+            entitlementService,
+            rewardDefinitions,
+            rewardService,
+            new NoOpDistributedLockService(),
+            new FixedClock(now),
+            new StaticLiveOpsScheduleItemProvider(),
+            NullLogger<BattlePassService>.Instance);
+
+        var response = await service.ClaimAsync(new GameServer.Api.Models.Dto.BattlePass.ClaimBattlePassRewardRequest
+        {
+            PlayerId = "p1",
+            SeasonId = "season_1",
+            Level = 0,
+            RewardTrack = BattlePassRewardTracks.Default
+        }, CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.Single(response.GrantedRewards);
+        Assert.Equal("Gems", response.GrantedRewards[0].RewardId);
+        Assert.Contains("Gems", rewardService.GrantedRewardIds);
     }
 
     [Fact]
@@ -248,7 +289,7 @@ public sealed class BattlePassServiceTests
         {
             PlayerId = "p1",
             SeasonId = "season_1",
-            Xp = 150,
+            Xp = 200,
             Level = 2,
             CreatedAtUtcMs = now,
             UpdatedAtUtcMs = now
@@ -278,10 +319,12 @@ public sealed class BattlePassServiceTests
         }, CancellationToken.None);
 
         Assert.True(response.Success);
-        Assert.Equal(4, rewardService.GrantedRewardIds.Count);
-        Assert.Equal(4, response.BattlePass!.ClaimedRewards.Count);
-        Assert.Equal(4, response.GrantedRewards.Count);
+        Assert.Equal(5, rewardService.GrantedRewardIds.Count);
+        Assert.Equal(5, response.BattlePass!.ClaimedRewards.Count);
+        Assert.Equal(5, response.GrantedRewards.Count);
+        Assert.Contains(response.GrantedRewards, x => x.Level == 0 && x.RewardTrack == BattlePassRewardTracks.Default && x.RewardId == "Gems");
         Assert.Contains(response.GrantedRewards, x => x.Level == 1 && x.RewardTrack == BattlePassRewardTracks.Default && x.RewardId == "reward_default_1");
         Assert.Contains(response.GrantedRewards, x => x.Level == 1 && x.RewardTrack == BattlePassRewardTracks.Premium && x.RewardId == "reward_premium_1");
+        Assert.DoesNotContain(response.GrantedRewards, x => x.Level == 0 && x.RewardTrack == BattlePassRewardTracks.Premium);
     }
 }

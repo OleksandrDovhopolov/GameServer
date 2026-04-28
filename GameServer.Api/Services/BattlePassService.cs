@@ -132,7 +132,7 @@ public sealed class BattlePassService : IBattlePassService
             string.IsNullOrWhiteSpace(request.PlayerId) ||
             string.IsNullOrWhiteSpace(request.SeasonId) ||
             string.IsNullOrWhiteSpace(request.RewardTrack) ||
-            request.Level <= 0)
+            request.Level < 0)
         {
             return BuildClaimFailure("playerId, seasonId, level and rewardTrack are required.");
         }
@@ -482,7 +482,7 @@ public sealed class BattlePassService : IBattlePassService
                 PlayerId = playerId,
                 SeasonId = season.Id,
                 Xp = 0,
-                Level = CalculateLevel(0, levels),
+                Level = 0,
                 ClaimedRewards = [],
                 CreatedAtUtcMs = nowUtcMs,
                 UpdatedAtUtcMs = nowUtcMs
@@ -653,13 +653,13 @@ public sealed class BattlePassService : IBattlePassService
         };
     }
 
-    private static string GetRewardId(BattlePassLevelRecord level, string rewardTrack)
+    private static string? GetRewardId(BattlePassLevelRecord level, string rewardTrack)
     {
         return rewardTrack switch
         {
             BattlePassRewardTracks.Default => level.DefaultRewardId,
             BattlePassRewardTracks.Premium => level.PremiumRewardId,
-            _ => string.Empty
+            _ => null
         };
     }
 

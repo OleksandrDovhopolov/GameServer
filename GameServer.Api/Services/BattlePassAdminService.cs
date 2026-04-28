@@ -144,7 +144,9 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
                 Level = x.Level,
                 XpRequired = x.XpRequired,
                 DefaultRewardId = x.DefaultRewardId.Trim(),
-                PremiumRewardId = x.PremiumRewardId.Trim()
+                PremiumRewardId = string.IsNullOrWhiteSpace(x.PremiumRewardId)
+                    ? null
+                    : x.PremiumRewardId.Trim()
             })
             .ToList();
 
@@ -387,23 +389,24 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             return "endAtUtc must be greater than startAtUtc.";
         }
 
-        if (levels.Count != season.MaxLevel)
+        if (levels.Count != season.MaxLevel + 1)
         {
-            return "Configured levels count must match maxLevel.";
+            return "Configured levels count must match maxLevel + 1.";
         }
 
         for (var index = 0; index < levels.Count; index++)
         {
-            var expectedLevel = index + 1;
+            var expectedLevel = index;
             if (levels[index].Level != expectedLevel)
             {
-                return "Levels must be contiguous and start from 1.";
+                return "Levels must be contiguous and start from 0.";
             }
         }
 
         var rewardIds = levels
             .SelectMany(x => new[] { x.DefaultRewardId, x.PremiumRewardId })
             .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Cast<string>()
             .Distinct(StringComparer.Ordinal)
             .ToList();
         foreach (var rewardId in rewardIds)

@@ -435,8 +435,16 @@ internal static class BattlePassTestFactory
             new BattlePassLevelRecord
             {
                 SeasonId = seasonId,
-                Level = 1,
+                Level = 0,
                 XpRequired = 0,
+                DefaultRewardId = "Gems",
+                PremiumRewardId = null
+            },
+            new BattlePassLevelRecord
+            {
+                SeasonId = seasonId,
+                Level = 1,
+                XpRequired = 100,
                 DefaultRewardId = "reward_default_1",
                 PremiumRewardId = "reward_premium_1"
             },
@@ -444,7 +452,7 @@ internal static class BattlePassTestFactory
             {
                 SeasonId = seasonId,
                 Level = 2,
-                XpRequired = 100,
+                XpRequired = 200,
                 DefaultRewardId = "reward_default_2",
                 PremiumRewardId = "reward_premium_2"
             }
@@ -455,6 +463,7 @@ internal static class BattlePassTestFactory
     {
         foreach (var rewardId in new[]
                  {
+                     "Gems",
                      "reward_default_1",
                      "reward_premium_1",
                      "reward_default_2",
@@ -470,8 +479,8 @@ internal static class BattlePassTestFactory
                     new RewardPart
                     {
                         Kind = RewardKind.Resource,
-                        TargetId = "Gold",
-                        Amount = 10
+                        TargetId = rewardId == "Gems" ? "Gems" : "Gold",
+                        Amount = rewardId == "Gems" ? 100 : 10
                     }
                 ]
             });
