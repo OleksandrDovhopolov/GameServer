@@ -68,6 +68,15 @@ public sealed class BattlePassAdminController : ControllerBase
         return ToActionResult(response);
     }
 
+    [HttpPost("reset-player")]
+    public async Task<ActionResult<BattlePassAdminOperationResponse>> ResetPlayer(
+        [FromBody] ResetBattlePassPlayerRequest request,
+        CancellationToken ct)
+    {
+        var response = await _battlePassAdminService.ResetPlayerProgressAsync(request, ct);
+        return ToActionResult(response);
+    }
+
     [HttpGet("player/{playerId}")]
     public async Task<ActionResult<BattlePassAdminOperationResponse>> GetPlayerState(
         [FromRoute] string playerId,

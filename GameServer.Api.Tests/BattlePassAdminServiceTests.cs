@@ -2,6 +2,7 @@ using GameServer.Api.Models.Dto.Admin;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Text.Json.Nodes;
 using Xunit;
 using GameServer.Api.Models.Domain.BattlePass;
 
@@ -207,6 +208,119 @@ public sealed class BattlePassAdminServiceTests
         var save = await saveRepository.LoadAsync("test-player-1", CancellationToken.None);
         Assert.NotNull(save);
         Assert.DoesNotContain("EventStates", save!.Data, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResetPlayerProgressAsync_ResetsStateRevokesEntitlementAndRemovesEventState()
+    {
+        const long now = 1_750_000_000_000;
+        var seasonRepository = new InMemoryBattlePassSeasonRepository();
+        var stateRepository = new InMemoryBattlePassStateRepository();
+        var rewardDefinitions = new InMemoryRewardDefinitionRepository();
+        var entitlementRepository = new InMemoryEntitlementRepository();
+        var saveRepository = new InMemorySaveRepository();
+        var playerAggregateRepository = new InMemoryPlayerAggregateRepository(saveRepository);
+        var playerEconomyRepository = new SaveBackedPlayerEconomyRepository(saveRepository);
+        var productCatalogRepository = new InMemoryProductCatalogRepository();
+        BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
+
+        var season = BattlePassTestFactory.CreateSeason(
+            "Test_Battle_Pass",
+            now - 20_000,
+            now + 20_000,
+            status: BattlePassSeasonStatuses.Active);
+        await seasonRepository.SaveAsync(season, CancellationToken.None);
+        await seasonRepository.SaveLevelsAsync(season.Id, BattlePassTestFactory.CreateLevels(season.Id), CancellationToken.None);
+
+        var aggregate = await playerAggregateRepository.LoadAsync("p1", CancellationToken.None);
+        aggregate.RootDocument["EventStates"] = new JsonArray
+        {
+            new JsonObject
+            {
+                ["ScheduleItemId"] = "Test_Battle_Pass",
+                ["State"] = 3
+            },
+            new JsonObject
+            {
+                ["ScheduleItemId"] = "Another_Event",
+                ["State"] = 2
+            }
+        };
+        await playerAggregateRepository.SaveAsync(aggregate, CancellationToken.None);
+
+        await stateRepository.SaveAsync(new UserBattlePassRecord
+        {
+            PlayerId = "p1",
+            SeasonId = season.Id,
+            Xp = 200,
+            Level = 2,
+            ClaimedRewards =
+            [
+                new ClaimedBattlePassRewardRecord
+                {
+                    Key = "1:default",
+                    Level = 1,
+                    RewardTrack = BattlePassRewardTracks.Default,
+                    ClaimedAtUtcMs = now - 1000
+                }
+            ],
+            CreatedAtUtcMs = now - 5000,
+            UpdatedAtUtcMs = now - 4000
+        }, CancellationToken.None);
+
+        var entitlementService = new EntitlementService(entitlementRepository, new FixedClock(now), NullLogger<EntitlementService>.Instance);
+        var grant = await entitlementService.GrantBattlePassEntitlementAsync(
+            "p1",
+            season.Id,
+            BattlePassPassTypes.Premium,
+            EntitlementSourceTypes.Admin,
+            null,
+            CancellationToken.None);
+        Assert.True(grant.Success);
+
+        var battlePassService = CreateBattlePassService(
+            now,
+            seasonRepository,
+            stateRepository: stateRepository,
+            rewardDefinitions: rewardDefinitions,
+            playerRepository: playerEconomyRepository,
+            entitlementRepository: entitlementRepository);
+        var service = new BattlePassAdminService(
+            seasonRepository,
+            stateRepository,
+            productCatalogRepository,
+            rewardDefinitions,
+            entitlementService,
+            playerEconomyRepository,
+            playerAggregateRepository,
+            new InMemoryPurchaseRepository(),
+            battlePassService,
+            new FixedClock(now));
+
+        var response = await service.ResetPlayerProgressAsync(new ResetBattlePassPlayerRequest
+        {
+            PlayerId = "p1",
+            SeasonId = season.Id
+        }, CancellationToken.None);
+
+        Assert.True(response.Success);
+
+        var state = await stateRepository.GetAsync("p1", season.Id, CancellationToken.None);
+        Assert.NotNull(state);
+        Assert.Equal(0, state!.Xp);
+        Assert.Equal(0, state.Level);
+        Assert.Empty(state.ClaimedRewards);
+
+        var passType = await entitlementService.GetBattlePassPassTypeAsync("p1", season.Id, now, CancellationToken.None);
+        Assert.Equal(BattlePassPassTypes.None, passType);
+
+        var saved = await saveRepository.LoadAsync("p1", CancellationToken.None);
+        Assert.NotNull(saved);
+        var root = JsonNode.Parse(saved!.Data)!.AsObject();
+        var states = root["EventStates"]!.AsArray();
+        Assert.Single(states);
+        var remaining = states[0]!.AsObject();
+        Assert.Equal("Another_Event", remaining["ScheduleItemId"]!.GetValue<string>());
     }
 
     private static BattlePassService CreateBattlePassService(

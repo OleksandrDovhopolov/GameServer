@@ -46,6 +46,13 @@ public sealed class RecreateBattlePassSeasonRequest
     public List<string> BootstrapPlayerIds { get; init; } = [];
 }
 
+public sealed class ResetBattlePassPlayerRequest
+{
+    public string PlayerId { get; init; } = string.Empty;
+    public string SeasonId { get; init; } = string.Empty;
+    public string? ScheduleItemId { get; init; }
+}
+
 public sealed class AdminGrantEntitlementRequest
 {
     public string PlayerId { get; init; } = string.Empty;

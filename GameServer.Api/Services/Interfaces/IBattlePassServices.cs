@@ -29,6 +29,7 @@ public interface IBattlePassAdminService
     Task<BattlePassAdminOperationResponse> PublishSeasonAsync(string seasonId, CancellationToken ct = default);
     Task<BattlePassAdminOperationResponse> ArchiveSeasonAsync(string seasonId, CancellationToken ct = default);
     Task<BattlePassAdminOperationResponse> RecreateSeasonAsync(RecreateBattlePassSeasonRequest request, CancellationToken ct = default);
+    Task<BattlePassAdminOperationResponse> ResetPlayerProgressAsync(ResetBattlePassPlayerRequest request, CancellationToken ct = default);
     Task<BattlePassAdminOperationResponse> GrantEntitlementAsync(AdminGrantEntitlementRequest request, CancellationToken ct = default);
     Task<BattlePassAdminOperationResponse> RevokeEntitlementAsync(AdminRevokeEntitlementRequest request, CancellationToken ct = default);
     Task<BattlePassAdminOperationResponse> GetPlayerStateAsync(string playerId, string? seasonId, CancellationToken ct = default);

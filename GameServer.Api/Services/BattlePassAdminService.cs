@@ -3,6 +3,7 @@ using GameServer.Api.Models.Dto.Admin;
 using GameServer.Api.Models.Dto.BattlePass;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services.Interfaces;
+using System.Text.Json.Nodes;
 
 namespace GameServer.Api.Services;
 
@@ -296,6 +297,62 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             Season = publishResponse.Season,
             Levels = publishResponse.Levels,
             BootstrappedPlayerIds = bootstrapPlayerIds
+        };
+    }
+
+    public async Task<BattlePassAdminOperationResponse> ResetPlayerProgressAsync(ResetBattlePassPlayerRequest request, CancellationToken ct = default)
+    {
+        if (request is null || string.IsNullOrWhiteSpace(request.PlayerId) || string.IsNullOrWhiteSpace(request.SeasonId))
+        {
+            return BuildFailure("playerId and seasonId are required.");
+        }
+
+        var playerExists = await _playerEconomyRepository.PlayerExistsAsync(request.PlayerId, ct);
+        if (!playerExists)
+        {
+            return BuildFailure("Player was not found.", BattlePassErrorCodes.PlayerNotFound);
+        }
+
+        var season = await _seasonRepository.GetByIdAsync(request.SeasonId, ct);
+        if (season is null)
+        {
+            return BuildFailure("Season was not found.", BattlePassErrorCodes.SeasonNotFound);
+        }
+
+        var nowUtcMs = _clock.UtcNowUnixMilliseconds;
+        var existingState = await _stateRepository.GetAsync(request.PlayerId, request.SeasonId, ct);
+        var createdAt = existingState?.CreatedAtUtcMs ?? nowUtcMs;
+        var resetState = new UserBattlePassRecord
+        {
+            PlayerId = request.PlayerId,
+            SeasonId = request.SeasonId,
+            Xp = 0,
+            Level = 0,
+            ClaimedRewards = [],
+            CreatedAtUtcMs = createdAt,
+            UpdatedAtUtcMs = nowUtcMs
+        };
+        await _stateRepository.SaveAsync(resetState, ct);
+
+        var revokeResult = await _entitlementService.RevokeBattlePassEntitlementAsync(
+            request.PlayerId,
+            request.SeasonId,
+            null,
+            ct);
+        if (!revokeResult.Success &&
+            !string.Equals(revokeResult.ErrorCode, BattlePassErrorCodes.ValidationError, StringComparison.Ordinal))
+        {
+            return BuildFailure(revokeResult.ErrorMessage ?? "Entitlement revoke failed.", revokeResult.ErrorCode ?? BattlePassErrorCodes.ValidationError);
+        }
+
+        var scheduleItemId = string.IsNullOrWhiteSpace(request.ScheduleItemId) ? request.SeasonId : request.ScheduleItemId.Trim();
+        var aggregate = await _playerAggregateRepository.LoadAsync(request.PlayerId, ct);
+        RemoveEventState(aggregate.RootDocument, scheduleItemId);
+        await _playerAggregateRepository.SaveAsync(aggregate, ct);
+
+        return new BattlePassAdminOperationResponse
+        {
+            Success = true
         };
     }
 
@@ -609,6 +666,33 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
     private static bool RangesOverlap(long leftStart, long leftEnd, long rightStart, long rightEnd)
     {
         return leftStart < rightEnd && rightStart < leftEnd;
+    }
+
+    private static void RemoveEventState(JsonObject root, string scheduleItemId)
+    {
+        if (!root.TryGetPropertyValue("EventStates", out var eventStatesNode) || eventStatesNode is not JsonArray eventStates)
+        {
+            return;
+        }
+
+        for (var index = eventStates.Count - 1; index >= 0; index--)
+        {
+            if (eventStates[index] is not JsonObject state)
+            {
+                continue;
+            }
+
+            if (!state.TryGetPropertyValue("ScheduleItemId", out var idNode) || idNode is null)
+            {
+                continue;
+            }
+
+            var value = idNode.GetValue<string>();
+            if (string.Equals(value, scheduleItemId, StringComparison.Ordinal))
+            {
+                eventStates.RemoveAt(index);
+            }
+        }
     }
 
     private static BattlePassAdminOperationResponse BuildFailure(
