@@ -49,6 +49,13 @@ public sealed class AdminMaintenanceService : IAdminMaintenanceService
                 Success = true
             };
         }
+        catch (RedisCommandException ex)
+        {
+            _logger.LogError(ex, "Admin Redis flush failed.");
+            return BuildFailure(
+                $"Redis flush failed. Ensure the connection string enables allowAdmin. {ex.Message}",
+                AdminMaintenanceErrorCodes.RedisFlushFailed);
+        }
         catch (RedisException ex)
         {
             _logger.LogError(ex, "Admin Redis flush failed.");
