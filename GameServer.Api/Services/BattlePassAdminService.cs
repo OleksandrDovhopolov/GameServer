@@ -14,6 +14,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
     private readonly IRewardDefinitionRepository _rewardDefinitionRepository;
     private readonly IEntitlementService _entitlementService;
     private readonly IPlayerEconomyRepository _playerEconomyRepository;
+    private readonly IPlayerAggregateRepository _playerAggregateRepository;
     private readonly IPurchaseRepository _purchaseRepository;
     private readonly IBattlePassService _battlePassService;
     private readonly ISystemClock _clock;
@@ -25,6 +26,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
         IRewardDefinitionRepository rewardDefinitionRepository,
         IEntitlementService entitlementService,
         IPlayerEconomyRepository playerEconomyRepository,
+        IPlayerAggregateRepository playerAggregateRepository,
         IPurchaseRepository purchaseRepository,
         IBattlePassService battlePassService,
         ISystemClock clock)
@@ -35,6 +37,7 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
         _rewardDefinitionRepository = rewardDefinitionRepository;
         _entitlementService = entitlementService;
         _playerEconomyRepository = playerEconomyRepository;
+        _playerAggregateRepository = playerAggregateRepository;
         _purchaseRepository = purchaseRepository;
         _battlePassService = battlePassService;
         _clock = clock;
@@ -231,6 +234,68 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
         {
             Success = true,
             Season = archived
+        };
+    }
+
+    public async Task<BattlePassAdminOperationResponse> RecreateSeasonAsync(RecreateBattlePassSeasonRequest request, CancellationToken ct = default)
+    {
+        if (request is null)
+        {
+            return BuildFailure("request is required.");
+        }
+
+        if (request.Season is null)
+        {
+            return BuildFailure("season is required.");
+        }
+
+        if (request.Levels.Count == 0)
+        {
+            return BuildFailure("At least one level is required.");
+        }
+
+        var bootstrapPlayerIds = request.BootstrapPlayerIds
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        if (bootstrapPlayerIds.Count != request.BootstrapPlayerIds.Count)
+        {
+            return BuildFailure("bootstrapPlayerIds must contain non-empty unique values.");
+        }
+
+        var createResponse = await CreateSeasonAsync(request.Season, ct);
+        if (!createResponse.Success)
+        {
+            return createResponse;
+        }
+
+        var levelsResponse = await UpsertLevelsAsync(request.Season.Id, new UpsertBattlePassLevelsRequest
+        {
+            Levels = request.Levels
+        }, ct);
+        if (!levelsResponse.Success)
+        {
+            return levelsResponse;
+        }
+
+        var publishResponse = await PublishSeasonAsync(request.Season.Id, ct);
+        if (!publishResponse.Success)
+        {
+            return publishResponse;
+        }
+
+        foreach (var playerId in bootstrapPlayerIds)
+        {
+            var aggregate = await _playerAggregateRepository.LoadAsync(playerId, ct);
+            await _playerAggregateRepository.SaveAsync(aggregate, ct);
+        }
+
+        return new BattlePassAdminOperationResponse
+        {
+            Success = true,
+            Season = publishResponse.Season,
+            Levels = publishResponse.Levels,
+            BootstrappedPlayerIds = bootstrapPlayerIds
         };
     }
 

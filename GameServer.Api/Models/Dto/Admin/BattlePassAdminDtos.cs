@@ -39,6 +39,13 @@ public sealed class UpsertBattlePassLevelsRequest
     public List<BattlePassLevelAdminRequest> Levels { get; init; } = [];
 }
 
+public sealed class RecreateBattlePassSeasonRequest
+{
+    public CreateBattlePassSeasonRequest Season { get; init; } = new();
+    public List<BattlePassLevelAdminRequest> Levels { get; init; } = [];
+    public List<string> BootstrapPlayerIds { get; init; } = [];
+}
+
 public sealed class AdminGrantEntitlementRequest
 {
     public string PlayerId { get; init; } = string.Empty;
@@ -70,6 +77,7 @@ public sealed class BattlePassAdminOperationResponse
     public UserEntitlementRecord? Entitlement { get; init; }
     public PurchaseRecord? Purchase { get; init; }
     public AdminPlayerBattlePassViewDto? PlayerState { get; init; }
+    public List<string> BootstrappedPlayerIds { get; init; } = [];
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
 }

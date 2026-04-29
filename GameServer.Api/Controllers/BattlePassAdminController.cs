@@ -59,6 +59,15 @@ public sealed class BattlePassAdminController : ControllerBase
         return ToActionResult(response);
     }
 
+    [HttpPost("recreate")]
+    public async Task<ActionResult<BattlePassAdminOperationResponse>> Recreate(
+        [FromBody] RecreateBattlePassSeasonRequest request,
+        CancellationToken ct)
+    {
+        var response = await _battlePassAdminService.RecreateSeasonAsync(request, ct);
+        return ToActionResult(response);
+    }
+
     [HttpGet("player/{playerId}")]
     public async Task<ActionResult<BattlePassAdminOperationResponse>> GetPlayerState(
         [FromRoute] string playerId,

@@ -42,6 +42,7 @@ builder.Services.AddScoped<IPackSelectionStrategy, PackSelectionStrategy>();
 builder.Services.AddScoped<IPackService, PackService>();
 builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
 builder.Services.Configure<PostgresOptions>(builder.Configuration.GetSection(PostgresOptions.SectionName));
+builder.Services.Configure<AdminToolsOptions>(builder.Configuration.GetSection(AdminToolsOptions.SectionName));
 builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 {
     var redisOptions = serviceProvider.GetRequiredService<IOptions<RedisOptions>>().Value;
@@ -70,6 +71,8 @@ builder.Services.AddScoped<IPlayerEconomyRepository, RedisPlayerEconomyRepositor
 builder.Services.AddScoped<IRewardIntentRepository, RedisRewardIntentRepository>();
 builder.Services.AddScoped<IRewardIntentService, RewardIntentService>();
 builder.Services.AddScoped<IDistributedLockService, RedisDistributedLockService>();
+builder.Services.AddScoped<IRedisAdminClient, RedisAdminClient>();
+builder.Services.AddScoped<IAdminMaintenanceService, AdminMaintenanceService>();
 builder.Services.AddScoped<IBattlePassSeasonRepository, RedisBattlePassSeasonRepository>();
 builder.Services.AddScoped<IBattlePassStateRepository, RedisBattlePassStateRepository>();
 builder.Services.AddScoped<IEntitlementRepository, RedisEntitlementRepository>();
