@@ -155,7 +155,8 @@ public sealed class IapService : IIapService
             return BuildFailure(failed.ErrorMessage ?? "Purchase verification failed.", failed.ErrorCode ?? BattlePassErrorCodes.PurchaseVerifyFailed, failed.Status);
         }
 
-        if (!string.Equals(verification.ProductId, request.ProductId, StringComparison.Ordinal))
+        if (!string.IsNullOrWhiteSpace(verification.ProductId) &&
+            !string.Equals(verification.ProductId, request.ProductId, StringComparison.Ordinal))
         {
             var mismatch = await SavePurchaseAsync(
                 existingPurchase,
