@@ -61,6 +61,12 @@ public interface IGooglePlayPurchaseVerifier
     Task<GooglePlayAcknowledgeResult> AcknowledgeAsync(string productId, string purchaseToken, CancellationToken ct = default);
 }
 
+public interface IGooglePlayProductPurchaseClient
+{
+    Task<GooglePlayProductPurchasePayload> GetAsync(string packageName, string productId, string purchaseToken, CancellationToken ct = default);
+    Task<string> AcknowledgeAsync(string packageName, string productId, string purchaseToken, CancellationToken ct = default);
+}
+
 public interface ILiveOpsScheduleItemProvider
 {
     Task<IReadOnlyList<LiveOpsScheduleItem>> GetItemsAsync(CancellationToken ct = default);
@@ -91,4 +97,12 @@ public sealed class GooglePlayAcknowledgeResult
     public string ProviderPayloadJson { get; init; } = "{}";
     public string? ErrorCode { get; init; }
     public string? ErrorMessage { get; init; }
+}
+
+public sealed class GooglePlayProductPurchasePayload
+{
+    public string ProductId { get; init; } = string.Empty;
+    public int PurchaseState { get; init; }
+    public int AcknowledgementState { get; init; }
+    public string ProviderPayloadJson { get; init; } = "{}";
 }

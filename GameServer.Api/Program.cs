@@ -43,6 +43,11 @@ builder.Services.AddScoped<IPackService, PackService>();
 builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
 builder.Services.Configure<PostgresOptions>(builder.Configuration.GetSection(PostgresOptions.SectionName));
 builder.Services.Configure<AdminToolsOptions>(builder.Configuration.GetSection(AdminToolsOptions.SectionName));
+builder.Services.Configure<GooglePlayBillingOptions>(builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName));
+
+var googlePlayBillingOptions = builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName).Get<GooglePlayBillingOptions>() ?? new GooglePlayBillingOptions();
+ValidateGooglePlayBillingConfiguration(builder.Environment, googlePlayBillingOptions);
+
 builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 {
     var redisOptions = serviceProvider.GetRequiredService<IOptions<RedisOptions>>().Value;
@@ -84,7 +89,15 @@ builder.Services.AddScoped<ILiveOpsScheduleService, FileLiveOpsScheduleService>(
 builder.Services.AddScoped<IBattlePassService, BattlePassService>();
 builder.Services.AddScoped<IIapService, IapService>();
 builder.Services.AddScoped<IBattlePassAdminService, BattlePassAdminService>();
-builder.Services.AddScoped<IGooglePlayPurchaseVerifier, StubGooglePlayPurchaseVerifier>();
+if (googlePlayBillingOptions.Enabled)
+{
+    builder.Services.AddSingleton<IGooglePlayProductPurchaseClient, GooglePlayPublisherApiClient>();
+    builder.Services.AddScoped<IGooglePlayPurchaseVerifier, GooglePlayPurchaseVerifier>();
+}
+else
+{
+    builder.Services.AddScoped<IGooglePlayPurchaseVerifier, StubGooglePlayPurchaseVerifier>();
+}
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 builder.Services.AddScoped<AdminBasicAuthFilter>();
 builder.Services.AddSingleton<IRandomGenerator, RandomGenerator>();
@@ -113,3 +126,34 @@ app.MapControllers();
 app.MapGet("/ping", () => "pong");
 
 app.Run();
+
+static void ValidateGooglePlayBillingConfiguration(IWebHostEnvironment environment, GooglePlayBillingOptions options)
+{
+    if (!options.Enabled)
+    {
+        if (!environment.IsDevelopment())
+        {
+            throw new InvalidOperationException("GooglePlayBilling must be enabled outside Development.");
+        }
+
+        return;
+    }
+
+    if (string.IsNullOrWhiteSpace(options.PackageName))
+    {
+        throw new InvalidOperationException("GooglePlayBilling:PackageName is not configured.");
+    }
+
+    var hasServiceAccountJson = !string.IsNullOrWhiteSpace(options.ServiceAccountJson);
+    var hasServiceAccountKeyFile = !string.IsNullOrWhiteSpace(options.ServiceAccountKeyFile);
+
+    if (!hasServiceAccountJson && !hasServiceAccountKeyFile)
+    {
+        throw new InvalidOperationException("GooglePlayBilling requires either ServiceAccountJson or ServiceAccountKeyFile.");
+    }
+
+    if (hasServiceAccountKeyFile && !File.Exists(options.ServiceAccountKeyFile))
+    {
+        throw new InvalidOperationException($"GooglePlayBilling:ServiceAccountKeyFile was not found at '{options.ServiceAccountKeyFile}'.");
+    }
+}
