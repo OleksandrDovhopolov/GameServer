@@ -46,6 +46,7 @@ builder.Services.Configure<AdminToolsOptions>(builder.Configuration.GetSection(A
 builder.Services.Configure<GooglePlayBillingOptions>(builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName));
 
 var googlePlayBillingOptions = builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName).Get<GooglePlayBillingOptions>() ?? new GooglePlayBillingOptions();
+LogGooglePlayBillingConfigurationState(builder.Environment, googlePlayBillingOptions);
 ValidateGooglePlayBillingConfiguration(builder.Environment, googlePlayBillingOptions);
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
@@ -156,4 +157,15 @@ static void ValidateGooglePlayBillingConfiguration(IWebHostEnvironment environme
     {
         throw new InvalidOperationException($"GooglePlayBilling:ServiceAccountKeyFile was not found at '{options.ServiceAccountKeyFile}'.");
     }
+}
+
+static void LogGooglePlayBillingConfigurationState(IWebHostEnvironment environment, GooglePlayBillingOptions options)
+{
+    Console.WriteLine(
+        "GooglePlayBilling config state: Environment={0}; Enabled={1}; PackageNameSet={2}; ServiceAccountJsonLength={3}; ServiceAccountKeyFileLength={4}",
+        environment.EnvironmentName,
+        options.Enabled,
+        !string.IsNullOrWhiteSpace(options.PackageName),
+        options.ServiceAccountJson?.Length ?? 0,
+        options.ServiceAccountKeyFile?.Length ?? 0);
 }
