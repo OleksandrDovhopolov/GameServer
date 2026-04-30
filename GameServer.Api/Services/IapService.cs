@@ -170,6 +170,12 @@ public sealed class IapService : IIapService
                 "Provider returned another product id.",
                 ct);
             await TryEnsureTokenIndexAsync(existingPurchase, mismatch, purchaseTokenHash, ct);
+            _logger.LogWarning(
+                "{EventName} RequestedProductId: {RequestedProductId}, ProviderProductId: {ProviderProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+                BattlePassTelemetry.PurchaseFailed,
+                request.ProductId,
+                verification.ProductId,
+                purchaseTokenHash);
             return BuildFailure("Provider returned another product id.", BattlePassErrorCodes.PurchaseProductMismatch, mismatch.Status);
         }
 
