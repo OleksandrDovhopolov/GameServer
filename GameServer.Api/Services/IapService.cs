@@ -171,11 +171,12 @@ public sealed class IapService : IIapService
                 ct);
             await TryEnsureTokenIndexAsync(existingPurchase, mismatch, purchaseTokenHash, ct);
             _logger.LogWarning(
-                "{EventName} RequestedProductId: {RequestedProductId}, ProviderProductId: {ProviderProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+                "{EventName} RequestedProductId: {RequestedProductId}, ProviderProductId: {ProviderProductId}, PurchaseTokenHash: {PurchaseTokenHash}, ProviderPayloadJson: {ProviderPayloadJson}",
                 BattlePassTelemetry.PurchaseFailed,
                 request.ProductId,
                 verification.ProductId,
-                purchaseTokenHash);
+                purchaseTokenHash,
+                verification.ProviderPayloadJson);
             return BuildFailure("Provider returned another product id.", BattlePassErrorCodes.PurchaseProductMismatch, mismatch.Status);
         }
 
