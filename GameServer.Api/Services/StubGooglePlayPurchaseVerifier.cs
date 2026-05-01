@@ -5,9 +5,20 @@ namespace GameServer.Api.Services;
 
 public sealed class StubGooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
 {
+    private readonly ILogger<StubGooglePlayPurchaseVerifier> _logger;
+
+    public StubGooglePlayPurchaseVerifier(ILogger<StubGooglePlayPurchaseVerifier> logger)
+    {
+        _logger = logger;
+    }
+
     public Task<GooglePlayPurchaseVerificationResult> VerifyAsync(string productId, string purchaseToken, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        _logger.LogWarning(
+            "Stub Google Play verifier handled verify request. ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+            productId,
+            string.IsNullOrWhiteSpace(purchaseToken) ? string.Empty : PurchaseTokenHasher.Hash(purchaseToken));
         if (string.IsNullOrWhiteSpace(productId) || string.IsNullOrWhiteSpace(purchaseToken))
         {
             return Task.FromResult(new GooglePlayPurchaseVerificationResult
@@ -57,6 +68,10 @@ public sealed class StubGooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
     public Task<GooglePlayAcknowledgeResult> AcknowledgeAsync(string productId, string purchaseToken, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        _logger.LogWarning(
+            "Stub Google Play verifier handled acknowledge request. ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+            productId,
+            string.IsNullOrWhiteSpace(purchaseToken) ? string.Empty : PurchaseTokenHasher.Hash(purchaseToken));
         if (purchaseToken.StartsWith("ackfail", StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult(new GooglePlayAcknowledgeResult

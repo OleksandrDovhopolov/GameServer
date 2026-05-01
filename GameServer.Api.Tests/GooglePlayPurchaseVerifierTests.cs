@@ -4,6 +4,7 @@ using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Google;
 using Google.Apis.Requests;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -141,7 +142,8 @@ public sealed class GooglePlayPurchaseVerifierTests
                 Enabled = true,
                 PackageName = "com.example.game",
                 ServiceAccountKeyFile = "unused-in-unit-tests.json"
-            }));
+            }),
+            NullLogger<GooglePlayPurchaseVerifier>.Instance);
     }
 
     private sealed class FakeGooglePlayProductPurchaseClient : IGooglePlayProductPurchaseClient

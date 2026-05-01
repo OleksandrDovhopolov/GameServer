@@ -123,11 +123,12 @@ public sealed class IapService : IIapService
         }
 
         _logger.LogInformation(
-            "{EventName} ProductId: {ProductId}, SeasonId: {SeasonId}, ExistingPurchaseId: {ExistingPurchaseId}",
+            "{EventName} ProductId: {ProductId}, SeasonId: {SeasonId}, ExistingPurchaseId: {ExistingPurchaseId}, VerifierType: {VerifierType}",
             BattlePassTelemetry.PurchaseStarted,
             request.ProductId,
             request.SeasonId,
-            existingPurchase?.Id ?? string.Empty);
+            existingPurchase?.Id ?? string.Empty,
+            _googlePlayPurchaseVerifier.GetType().Name);
 
         var verification = await _googlePlayPurchaseVerifier.VerifyAsync(request.ProductId, request.PurchaseToken, ct);
         if (!verification.Success)
@@ -280,6 +281,13 @@ public sealed class IapService : IIapService
 
         if (!verification.IsAcknowledged)
         {
+            _logger.LogInformation(
+                "Purchase requires acknowledge. ProductId: {ProductId}, SeasonId: {SeasonId}, PurchaseId: {PurchaseId}, PurchaseTokenHash: {PurchaseTokenHash}, VerifierType: {VerifierType}",
+                request.ProductId,
+                request.SeasonId,
+                purchase.Id,
+                purchaseTokenHash,
+                _googlePlayPurchaseVerifier.GetType().Name);
             var acknowledge = await _googlePlayPurchaseVerifier.AcknowledgeAsync(request.ProductId, request.PurchaseToken, ct);
             if (!acknowledge.Success)
             {
@@ -331,6 +339,12 @@ public sealed class IapService : IIapService
                 null,
                 ct,
                 entitlementResult.Entitlement.Id);
+            _logger.LogInformation(
+                "Purchase acknowledge succeeded. ProductId: {ProductId}, SeasonId: {SeasonId}, PurchaseId: {PurchaseId}, PurchaseTokenHash: {PurchaseTokenHash}",
+                request.ProductId,
+                request.SeasonId,
+                purchase.Id,
+                purchaseTokenHash);
         }
 
         return await BuildSuccessResponseAsync(

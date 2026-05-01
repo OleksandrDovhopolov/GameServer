@@ -11,13 +11,16 @@ public sealed class GooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
 {
     private readonly IGooglePlayProductPurchaseClient _client;
     private readonly GooglePlayBillingOptions _options;
+    private readonly ILogger<GooglePlayPurchaseVerifier> _logger;
 
     public GooglePlayPurchaseVerifier(
         IGooglePlayProductPurchaseClient client,
-        IOptions<GooglePlayBillingOptions> options)
+        IOptions<GooglePlayBillingOptions> options,
+        ILogger<GooglePlayPurchaseVerifier> logger)
     {
         _client = client;
         _options = options.Value;
+        _logger = logger;
     }
 
     public async Task<GooglePlayPurchaseVerificationResult> VerifyAsync(
@@ -38,7 +41,19 @@ public sealed class GooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
 
         try
         {
+            _logger.LogInformation(
+                "Google Play verify request started. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken));
             var purchase = await _client.GetAsync(_options.PackageName, productId, purchaseToken, ct);
+            _logger.LogInformation(
+                "Google Play verify request completed. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}, PurchaseState: {PurchaseState}, AcknowledgementState: {AcknowledgementState}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken),
+                purchase.PurchaseState,
+                purchase.AcknowledgementState);
             return new GooglePlayPurchaseVerificationResult
             {
                 Success = true,
@@ -50,6 +65,13 @@ public sealed class GooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
         }
         catch (GoogleApiException ex)
         {
+            _logger.LogWarning(
+                ex,
+                "Google Play verify request failed. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}, HttpStatusCode: {HttpStatusCode}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken),
+                ex.HttpStatusCode);
             return new GooglePlayPurchaseVerificationResult
             {
                 Success = false,
@@ -80,14 +102,32 @@ public sealed class GooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
 
         try
         {
+            _logger.LogInformation(
+                "Google Play acknowledge request started. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken));
+            var payload = await _client.AcknowledgeAsync(_options.PackageName, productId, purchaseToken, ct);
+            _logger.LogInformation(
+                "Google Play acknowledge request completed. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken));
             return new GooglePlayAcknowledgeResult
             {
                 Success = true,
-                ProviderPayloadJson = await _client.AcknowledgeAsync(_options.PackageName, productId, purchaseToken, ct)
+                ProviderPayloadJson = payload
             };
         }
         catch (GoogleApiException ex)
         {
+            _logger.LogWarning(
+                ex,
+                "Google Play acknowledge request failed. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}, HttpStatusCode: {HttpStatusCode}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken),
+                ex.HttpStatusCode);
             return new GooglePlayAcknowledgeResult
             {
                 Success = false,

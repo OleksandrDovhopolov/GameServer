@@ -108,6 +108,16 @@ builder.Services.AddScoped<IWheelService, WheelService>();
 
 var app = builder.Build();
 
+app.Logger.LogInformation(
+    "Google Play billing startup state. Enabled: {Enabled}, PackageNameSet: {PackageNameSet}, ServiceAccountJsonSet: {ServiceAccountJsonSet}, ServiceAccountKeyFileSet: {ServiceAccountKeyFileSet}, ApplicationName: {ApplicationName}, HttpTimeoutSeconds: {HttpTimeoutSeconds}, VerifierMode: {VerifierMode}",
+    googlePlayBillingOptions.Enabled,
+    !string.IsNullOrWhiteSpace(googlePlayBillingOptions.PackageName),
+    !string.IsNullOrWhiteSpace(googlePlayBillingOptions.ServiceAccountJson),
+    !string.IsNullOrWhiteSpace(googlePlayBillingOptions.ServiceAccountKeyFile),
+    googlePlayBillingOptions.ApplicationName,
+    googlePlayBillingOptions.HttpTimeoutSeconds,
+    googlePlayBillingOptions.Enabled ? nameof(GooglePlayPurchaseVerifier) : nameof(StubGooglePlayPurchaseVerifier));
+
 // Force reward catalog initialization at startup so invalid configuration fails fast.
 app.Services.GetRequiredService<IWheelRewardCatalog>();
 app.Services.GetRequiredService<IRewardDefinitionRepository>();

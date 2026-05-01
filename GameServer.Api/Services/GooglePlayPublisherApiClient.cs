@@ -19,10 +19,14 @@ public sealed class GooglePlayPublisherApiClient : IGooglePlayProductPurchaseCli
     ];
 
     private readonly AndroidPublisherService _service;
+    private readonly ILogger<GooglePlayPublisherApiClient> _logger;
 
-    public GooglePlayPublisherApiClient(IOptions<GooglePlayBillingOptions> options)
+    public GooglePlayPublisherApiClient(
+        IOptions<GooglePlayBillingOptions> options,
+        ILogger<GooglePlayPublisherApiClient> logger)
     {
         var value = options.Value;
+        _logger = logger;
         var credential = CreateCredential(value).CreateScoped(Scopes);
         var initializer = new BaseClientService.Initializer
         {
@@ -32,6 +36,12 @@ public sealed class GooglePlayPublisherApiClient : IGooglePlayProductPurchaseCli
         };
 
         _service = new AndroidPublisherService(initializer);
+        _logger.LogInformation(
+            "Google Play publisher API client initialized. PackageNameSet: {PackageNameSet}, ServiceAccountSource: {ServiceAccountSource}, ApplicationName: {ApplicationName}, HttpTimeoutSeconds: {HttpTimeoutSeconds}",
+            !string.IsNullOrWhiteSpace(value.PackageName),
+            string.IsNullOrWhiteSpace(value.ServiceAccountJson) ? "file" : "json",
+            value.ApplicationName,
+            value.HttpTimeoutSeconds);
     }
 
     private static GoogleCredential CreateCredential(GooglePlayBillingOptions options)
@@ -51,6 +61,11 @@ public sealed class GooglePlayPublisherApiClient : IGooglePlayProductPurchaseCli
         string purchaseToken,
         CancellationToken ct = default)
     {
+        _logger.LogInformation(
+            "Calling Google Play Purchases.Products.Get. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+            packageName,
+            productId,
+            PurchaseTokenHasher.Hash(purchaseToken));
         var response = await _service.Purchases.Products.Get(packageName, productId, purchaseToken).ExecuteAsync(ct);
         return new GooglePlayProductPurchasePayload
         {
@@ -83,6 +98,11 @@ public sealed class GooglePlayPublisherApiClient : IGooglePlayProductPurchaseCli
         string purchaseToken,
         CancellationToken ct = default)
     {
+        _logger.LogInformation(
+            "Calling Google Play Purchases.Products.Acknowledge. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+            packageName,
+            productId,
+            PurchaseTokenHasher.Hash(purchaseToken));
         var request = _service.Purchases.Products.Acknowledge(
             new ProductPurchasesAcknowledgeRequest(),
             packageName,
