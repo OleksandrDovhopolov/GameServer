@@ -72,6 +72,7 @@ public sealed class GooglePlayPublisherApiClient : IGooglePlayProductPurchaseCli
             ProductId = response.ProductId ?? string.Empty,
             PurchaseState = response.PurchaseState ?? 0,
             AcknowledgementState = response.AcknowledgementState ?? 0,
+            ConsumptionState = response.ConsumptionState ?? 0,
             ProviderPayloadJson = JsonSerializer.Serialize(new Dictionary<string, object?>(StringComparer.Ordinal)
             {
                 ["kind"] = response.Kind,
@@ -114,6 +115,30 @@ public sealed class GooglePlayPublisherApiClient : IGooglePlayProductPurchaseCli
             ["packageName"] = packageName,
             ["productId"] = productId,
             ["acknowledged"] = true
+        });
+    }
+
+    public async Task<string> ConsumeAsync(
+        string packageName,
+        string productId,
+        string purchaseToken,
+        CancellationToken ct = default)
+    {
+        _logger.LogInformation(
+            "Calling Google Play Purchases.Products.Consume. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+            packageName,
+            productId,
+            PurchaseTokenHasher.Hash(purchaseToken));
+        var request = _service.Purchases.Products.Consume(
+            packageName,
+            productId,
+            purchaseToken);
+        await request.ExecuteAsync(ct);
+        return JsonSerializer.Serialize(new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["packageName"] = packageName,
+            ["productId"] = productId,
+            ["consumed"] = true
         });
     }
 

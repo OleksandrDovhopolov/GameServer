@@ -67,6 +67,11 @@ public sealed class AdminRevokeEntitlementRequest
     public string? PassType { get; init; }
 }
 
+public sealed class AdminRetryPurchaseFinalizationRequest
+{
+    public string PurchaseToken { get; init; } = string.Empty;
+}
+
 public sealed class AdminPlayerBattlePassViewDto
 {
     public string PlayerId { get; init; } = string.Empty;

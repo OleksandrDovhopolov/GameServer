@@ -23,5 +23,10 @@ public static class BattlePassErrorCodes
     public const string PassAlreadyOwned = "PASS_ALREADY_OWNED";
     public const string PurchaseVerifyFailed = "PURCHASE_VERIFY_FAILED";
     public const string PurchaseAcknowledgeFailed = "PURCHASE_ACKNOWLEDGE_FAILED";
+    public const string PurchaseConsumeFailed = "PURCHASE_CONSUME_FAILED";
+    public const string PurchaseAlreadyProcessed = "PURCHASE_ALREADY_PROCESSED";
+    public const string PurchaseFinalizationPending = "PURCHASE_FINALIZATION_PENDING";
+    public const string PurchaseFinalizationInvalidState = "PURCHASE_FINALIZATION_INVALID_STATE";
+    public const string PurchaseTokenMismatch = "PURCHASE_TOKEN_MISMATCH";
     public const string PurchaseNotFound = "PURCHASE_NOT_FOUND";
 }

@@ -174,5 +174,10 @@ public sealed class GooglePlayPurchaseVerifierTests
 
             return Task.FromResult(AcknowledgeResult);
         }
+
+        public Task<string> ConsumeAsync(string packageName, string productId, string purchaseToken, CancellationToken ct = default)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

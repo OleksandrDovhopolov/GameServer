@@ -48,18 +48,20 @@ public sealed class GooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
                 PurchaseTokenHasher.Hash(purchaseToken));
             var purchase = await _client.GetAsync(_options.PackageName, productId, purchaseToken, ct);
             _logger.LogInformation(
-                "Google Play verify request completed. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}, PurchaseState: {PurchaseState}, AcknowledgementState: {AcknowledgementState}",
+                "Google Play verify request completed. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}, PurchaseState: {PurchaseState}, AcknowledgementState: {AcknowledgementState}, ConsumptionState: {ConsumptionState}",
                 _options.PackageName,
                 productId,
                 PurchaseTokenHasher.Hash(purchaseToken),
                 purchase.PurchaseState,
-                purchase.AcknowledgementState);
+                purchase.AcknowledgementState,
+                purchase.ConsumptionState);
             return new GooglePlayPurchaseVerificationResult
             {
                 Success = true,
                 ProductId = purchase.ProductId,
                 PurchaseState = MapPurchaseState(purchase.PurchaseState),
                 IsAcknowledged = purchase.AcknowledgementState != 0,
+                IsConsumed = purchase.ConsumptionState != 0,
                 ProviderPayloadJson = purchase.ProviderPayloadJson
             };
         }
@@ -134,6 +136,60 @@ public sealed class GooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
                 ErrorCode = BattlePassErrorCodes.PurchaseAcknowledgeFailed,
                 ErrorMessage = BuildGoogleApiErrorMessage("acknowledge", ex),
                 ProviderPayloadJson = BuildGoogleApiErrorPayload("acknowledge", productId, ex)
+            };
+        }
+    }
+
+    public async Task<GooglePlayConsumeResult> ConsumeAsync(
+        string productId,
+        string purchaseToken,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(productId) || string.IsNullOrWhiteSpace(purchaseToken))
+        {
+            return new GooglePlayConsumeResult
+            {
+                Success = false,
+                ErrorCode = BattlePassErrorCodes.ValidationError,
+                ErrorMessage = "productId and purchaseToken are required."
+            };
+        }
+
+        try
+        {
+            _logger.LogInformation(
+                "Google Play consume request started. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken));
+            var payload = await _client.ConsumeAsync(_options.PackageName, productId, purchaseToken, ct);
+            _logger.LogInformation(
+                "Google Play consume request completed. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken));
+            return new GooglePlayConsumeResult
+            {
+                Success = true,
+                ProviderPayloadJson = payload
+            };
+        }
+        catch (GoogleApiException ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Google Play consume request failed. PackageName: {PackageName}, ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}, HttpStatusCode: {HttpStatusCode}",
+                _options.PackageName,
+                productId,
+                PurchaseTokenHasher.Hash(purchaseToken),
+                ex.HttpStatusCode);
+            return new GooglePlayConsumeResult
+            {
+                Success = false,
+                ErrorCode = BattlePassErrorCodes.PurchaseConsumeFailed,
+                ErrorMessage = BuildGoogleApiErrorMessage("consume", ex),
+                ProviderPayloadJson = BuildGoogleApiErrorPayload("consume", productId, ex)
             };
         }
     }

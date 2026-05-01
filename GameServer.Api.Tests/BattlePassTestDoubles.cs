@@ -236,6 +236,7 @@ internal sealed class FakeGooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifi
 {
     private readonly Dictionary<string, GooglePlayPurchaseVerificationResult> _verifyResults = new(StringComparer.Ordinal);
     private readonly Dictionary<string, GooglePlayAcknowledgeResult> _ackResults = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, GooglePlayConsumeResult> _consumeResults = new(StringComparer.Ordinal);
 
     public void SeedVerify(string purchaseToken, GooglePlayPurchaseVerificationResult result)
     {
@@ -245,6 +246,11 @@ internal sealed class FakeGooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifi
     public void SeedAcknowledge(string purchaseToken, GooglePlayAcknowledgeResult result)
     {
         _ackResults[purchaseToken] = result;
+    }
+
+    public void SeedConsume(string purchaseToken, GooglePlayConsumeResult result)
+    {
+        _consumeResults[purchaseToken] = result;
     }
 
     public Task<GooglePlayPurchaseVerificationResult> VerifyAsync(string productId, string purchaseToken, CancellationToken ct = default)
@@ -259,6 +265,14 @@ internal sealed class FakeGooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifi
         return Task.FromResult(_ackResults.TryGetValue(purchaseToken, out var result)
             ? result
             : new GooglePlayAcknowledgeResult { Success = true, ProviderPayloadJson = "{}" });
+    }
+
+    public Task<GooglePlayConsumeResult> ConsumeAsync(string productId, string purchaseToken, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(_consumeResults.TryGetValue(purchaseToken, out var result)
+            ? result
+            : new GooglePlayConsumeResult { Success = true, ProviderPayloadJson = "{}" });
     }
 }
 

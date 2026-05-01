@@ -36,7 +36,7 @@ public sealed class StubGooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
                 Success = false,
                 ErrorCode = BattlePassErrorCodes.PurchaseVerifyFailed,
                 ErrorMessage = "Stub verifier failed the purchase token.",
-                ProviderPayloadJson = BuildPayload(productId, purchaseToken, "verification_failed", false)
+                ProviderPayloadJson = BuildPayload(productId, purchaseToken, "verification_failed", false, false)
             });
         }
 
@@ -55,13 +55,15 @@ public sealed class StubGooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
         }
 
         var acknowledged = purchaseToken.Contains("acknowledged", StringComparison.OrdinalIgnoreCase);
+        var consumed = purchaseToken.Contains("consumed", StringComparison.OrdinalIgnoreCase);
         return Task.FromResult(new GooglePlayPurchaseVerificationResult
         {
             Success = true,
             ProductId = productId,
             PurchaseState = purchaseState,
             IsAcknowledged = acknowledged,
-            ProviderPayloadJson = BuildPayload(productId, purchaseToken, purchaseState, acknowledged)
+            IsConsumed = consumed,
+            ProviderPayloadJson = BuildPayload(productId, purchaseToken, purchaseState, acknowledged, consumed)
         });
     }
 
@@ -79,25 +81,51 @@ public sealed class StubGooglePlayPurchaseVerifier : IGooglePlayPurchaseVerifier
                 Success = false,
                 ErrorCode = BattlePassErrorCodes.PurchaseAcknowledgeFailed,
                 ErrorMessage = "Stub acknowledge failed.",
-                ProviderPayloadJson = BuildPayload(productId, purchaseToken, "ack_failed", false)
+                ProviderPayloadJson = BuildPayload(productId, purchaseToken, "ack_failed", false, false)
             });
         }
 
         return Task.FromResult(new GooglePlayAcknowledgeResult
         {
             Success = true,
-            ProviderPayloadJson = BuildPayload(productId, purchaseToken, "acknowledged", true)
+            ProviderPayloadJson = BuildPayload(productId, purchaseToken, "acknowledged", true, false)
         });
     }
 
-    private static string BuildPayload(string productId, string purchaseToken, string state, bool acknowledged)
+    public Task<GooglePlayConsumeResult> ConsumeAsync(string productId, string purchaseToken, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        _logger.LogWarning(
+            "Stub Google Play verifier handled consume request. ProductId: {ProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
+            productId,
+            string.IsNullOrWhiteSpace(purchaseToken) ? string.Empty : PurchaseTokenHasher.Hash(purchaseToken));
+        if (purchaseToken.StartsWith("consumefail", StringComparison.OrdinalIgnoreCase))
+        {
+            return Task.FromResult(new GooglePlayConsumeResult
+            {
+                Success = false,
+                ErrorCode = BattlePassErrorCodes.PurchaseConsumeFailed,
+                ErrorMessage = "Stub consume failed.",
+                ProviderPayloadJson = BuildPayload(productId, purchaseToken, "consume_failed", false, false)
+            });
+        }
+
+        return Task.FromResult(new GooglePlayConsumeResult
+        {
+            Success = true,
+            ProviderPayloadJson = BuildPayload(productId, purchaseToken, "consumed", false, true)
+        });
+    }
+
+    private static string BuildPayload(string productId, string purchaseToken, string state, bool acknowledged, bool consumed)
     {
         return JsonSerializer.Serialize(new Dictionary<string, object?>(StringComparer.Ordinal)
         {
             ["productId"] = productId,
             ["purchaseTokenHash"] = PurchaseTokenHasher.Hash(purchaseToken),
             ["state"] = state,
-            ["acknowledged"] = acknowledged
+            ["acknowledged"] = acknowledged,
+            ["consumed"] = consumed
         });
     }
 }

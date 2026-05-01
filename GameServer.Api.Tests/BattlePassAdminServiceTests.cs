@@ -53,6 +53,7 @@ public sealed class BattlePassAdminServiceTests
             new InMemoryPlayerAggregateRepository(new InMemorySaveRepository()),
             new InMemoryPurchaseRepository(),
             CreateBattlePassService(now, seasonRepository, rewardDefinitions: rewardDefinitions),
+            new FakeGooglePlayPurchaseVerifier(),
             new FixedClock(now));
 
         var response = await service.PublishSeasonAsync(season.Id, CancellationToken.None);
@@ -86,6 +87,7 @@ public sealed class BattlePassAdminServiceTests
             new InMemoryPlayerAggregateRepository(new InMemorySaveRepository()),
             new InMemoryPurchaseRepository(),
             CreateBattlePassService(now, seasonRepository, rewardDefinitions: rewardDefinitions),
+            new FakeGooglePlayPurchaseVerifier(),
             new FixedClock(now));
 
         var response = await service.UpsertLevelsAsync(season.Id, new UpsertBattlePassLevelsRequest
@@ -150,6 +152,7 @@ public sealed class BattlePassAdminServiceTests
             playerAggregateRepository,
             new InMemoryPurchaseRepository(),
             battlePassService,
+            new FakeGooglePlayPurchaseVerifier(),
             new FixedClock(now));
 
         var response = await service.RecreateSeasonAsync(new RecreateBattlePassSeasonRequest
@@ -295,6 +298,7 @@ public sealed class BattlePassAdminServiceTests
             playerAggregateRepository,
             new InMemoryPurchaseRepository(),
             battlePassService,
+            new FakeGooglePlayPurchaseVerifier(),
             new FixedClock(now));
 
         var response = await service.ResetPlayerProgressAsync(new ResetBattlePassPlayerRequest

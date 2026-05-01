@@ -56,11 +56,26 @@ public static class PurchaseTypes
     public const string Subscription = "subscription";
 }
 
+public static class CatalogProductMetadataKeys
+{
+    public const string SeasonId = "seasonId";
+    public const string PassType = "passType";
+    public const string FinalizationMode = "finalizationMode";
+}
+
+public static class PurchaseFinalizationModes
+{
+    public const string Consume = "consume";
+    public const string Acknowledge = "acknowledge";
+}
+
 public static class PurchaseStatuses
 {
     public const string Pending = "pending";
     public const string Verified = "verified";
     public const string Granted = "granted";
+    public const string GrantedFinalizationPending = "granted_finalization_pending";
+    public const string Consumed = "consumed";
     public const string Acknowledged = "acknowledged";
     public const string Failed = "failed";
     public const string Refunded = "refunded";
@@ -135,6 +150,12 @@ public sealed class PurchaseRecord
     public string PurchaseTokenHash { get; init; } = string.Empty;
     public string Status { get; init; } = PurchaseStatuses.Pending;
     public string PurchaseType { get; init; } = string.Empty;
+    public string FinalizationMode { get; init; } = string.Empty;
+    public int FinalizationAttemptCount { get; init; }
+    public long? LastFinalizationAttemptAtUtcMs { get; init; }
+    public string? FinalizationErrorCode { get; init; }
+    public string? FinalizationErrorMessage { get; init; }
+    public long? FinalizedAtUtcMs { get; init; }
     public string? LinkedEntitlementId { get; init; }
     public string ProviderPayloadJson { get; init; } = "{}";
     public string? ErrorCode { get; init; }

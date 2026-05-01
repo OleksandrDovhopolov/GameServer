@@ -33,4 +33,23 @@ public sealed class PurchasesAdminController : ControllerBase
             _ => BadRequest(response)
         };
     }
+
+    [HttpPost("{purchaseId}/retry-finalization")]
+    public async Task<ActionResult<BattlePassAdminOperationResponse>> RetryFinalization(
+        [FromRoute] string purchaseId,
+        [FromBody] AdminRetryPurchaseFinalizationRequest request,
+        CancellationToken ct)
+    {
+        var response = await _battlePassAdminService.RetryPurchaseFinalizationAsync(purchaseId, request, ct);
+        if (response.Success)
+        {
+            return Ok(response);
+        }
+
+        return response.ErrorCode switch
+        {
+            BattlePassErrorCodes.PurchaseNotFound => NotFound(response),
+            _ => BadRequest(response)
+        };
+    }
 }

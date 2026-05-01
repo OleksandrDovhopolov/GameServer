@@ -50,13 +50,13 @@ public sealed class IapService : IIapService
             string.IsNullOrWhiteSpace(request.PurchaseToken) ||
             string.IsNullOrWhiteSpace(request.SeasonId))
         {
-            return BuildFailure("playerId, productId, purchaseToken and seasonId are required.");
+            return BuildVerifyFailure("playerId, productId, purchaseToken and seasonId are required.");
         }
 
         var playerExists = await _playerEconomyRepository.PlayerExistsAsync(request.PlayerId, ct);
         if (!playerExists)
         {
-            return BuildFailure("Player was not found.", BattlePassErrorCodes.PlayerNotFound);
+            return BuildVerifyFailure("Player was not found.", BattlePassErrorCodes.PlayerNotFound);
         }
 
         var purchaseTokenHash = PurchaseTokenHasher.Hash(request.PurchaseToken);
@@ -77,62 +77,118 @@ public sealed class IapService : IIapService
         var season = await _seasonRepository.GetByIdAsync(request.SeasonId, ct);
         if (season is null)
         {
-            return BuildFailure("Season was not found.", BattlePassErrorCodes.SeasonNotFound);
+            return BuildVerifyFailure("Season was not found.", BattlePassErrorCodes.SeasonNotFound);
         }
 
         var normalizedSeason = BattlePassSeasonState.Normalize(season, nowUtcMs);
         if (!BattlePassSeasonState.IsPurchasable(normalizedSeason.Status))
         {
-            return BuildFailure("Season is not available for purchase.", BattlePassErrorCodes.SeasonNotPurchasable);
+            return BuildVerifyFailure("Season is not available for purchase.", BattlePassErrorCodes.SeasonNotPurchasable);
         }
 
         var product = await _productCatalogRepository.GetByIdAsync(request.ProductId, ct);
         if (product is null)
         {
-            return BuildFailure("Product was not found.", BattlePassErrorCodes.ProductNotFound);
+            return BuildVerifyFailure("Product was not found.", BattlePassErrorCodes.ProductNotFound);
         }
 
-        if (!product.Metadata.TryGetValue("seasonId", out var catalogSeasonId) ||
+        if (!product.Metadata.TryGetValue(CatalogProductMetadataKeys.SeasonId, out var catalogSeasonId) ||
             !string.Equals(catalogSeasonId, request.SeasonId, StringComparison.Ordinal))
         {
-            return BuildFailure("Product does not belong to the requested season.", BattlePassErrorCodes.ProductNotFound);
+            return BuildVerifyFailure("Product does not belong to the requested season.", BattlePassErrorCodes.ProductNotFound);
         }
 
-        var requestedPassType = product.Metadata.TryGetValue("passType", out var productPassType)
+        var requestedPassType = product.Metadata.TryGetValue(CatalogProductMetadataKeys.PassType, out var productPassType)
             ? productPassType
             : BattlePassPassTypes.None;
         if (string.Equals(requestedPassType, BattlePassPassTypes.None, StringComparison.Ordinal))
         {
-            return BuildFailure("Product pass type is not configured.", BattlePassErrorCodes.ProductNotFound);
+            return BuildVerifyFailure("Product pass type is not configured.", BattlePassErrorCodes.ProductNotFound);
+        }
+
+        if (!product.Metadata.TryGetValue(CatalogProductMetadataKeys.FinalizationMode, out var finalizationMode) ||
+            !IsSupportedFinalizationMode(finalizationMode))
+        {
+            return BuildVerifyFailure("Product finalization mode is not configured.", BattlePassErrorCodes.ValidationError);
         }
 
         var existingPurchase = await _purchaseRepository.GetByTokenHashAsync(purchaseTokenHash, ct);
-        if (existingPurchase is not null && !string.Equals(existingPurchase.PlayerId, request.PlayerId, StringComparison.Ordinal))
+        if (existingPurchase is not null &&
+            !string.Equals(existingPurchase.PlayerId, request.PlayerId, StringComparison.Ordinal))
         {
-            return BuildFailure("Purchase token is already linked to another player.", BattlePassErrorCodes.PurchaseAlreadyUsed);
+            return BuildVerifyFailure("Purchase token is already linked to another player.", BattlePassErrorCodes.PurchaseAlreadyUsed);
         }
 
-        if (existingPurchase is not null && string.Equals(existingPurchase.Status, PurchaseStatuses.Acknowledged, StringComparison.Ordinal))
+        if (existingPurchase is not null && IsPurchaseFinalized(existingPurchase, finalizationMode))
         {
+            var entitlement = await _entitlementService.GetActiveBattlePassEntitlementAsync(request.PlayerId, request.SeasonId, nowUtcMs, ct);
+            if (entitlement is null)
+            {
+                return BuildVerifyFailure(
+                    "Purchase is already finalized but no active entitlement was found.",
+                    BattlePassErrorCodes.PurchaseAlreadyProcessed);
+            }
+
             return await BuildSuccessResponseAsync(
-                existingPurchase.Status,
                 request.PlayerId,
                 request.SeasonId,
-                await _entitlementService.GetActiveBattlePassEntitlementAsync(request.PlayerId, request.SeasonId, nowUtcMs, ct),
+                entitlement,
+                GetSuccessPurchaseStatus(existingPurchase.Status),
+                GetGoogleFinalizeStatus(existingPurchase.Status),
+                isDuplicate: true,
                 ct);
         }
 
         _logger.LogInformation(
-            "{EventName} ProductId: {ProductId}, SeasonId: {SeasonId}, ExistingPurchaseId: {ExistingPurchaseId}, VerifierType: {VerifierType}",
+            "{EventName} ProductId: {ProductId}, SeasonId: {SeasonId}, ExistingPurchaseId: {ExistingPurchaseId}, VerifierType: {VerifierType}, FinalizationMode: {FinalizationMode}",
             BattlePassTelemetry.PurchaseStarted,
             request.ProductId,
             request.SeasonId,
             existingPurchase?.Id ?? string.Empty,
-            _googlePlayPurchaseVerifier.GetType().Name);
+            _googlePlayPurchaseVerifier.GetType().Name,
+            finalizationMode);
 
         var verification = await _googlePlayPurchaseVerifier.VerifyAsync(request.ProductId, request.PurchaseToken, ct);
         if (!verification.Success)
         {
+            if (existingPurchase is not null && IsPendingFinalization(existingPurchase, finalizationMode))
+            {
+                var existingEntitlement = await _entitlementService.GetActiveBattlePassEntitlementAsync(request.PlayerId, request.SeasonId, nowUtcMs, ct);
+                if (existingEntitlement is null)
+                {
+                    return BuildVerifyFailure(
+                        "Purchase finalization is pending but the linked entitlement is missing.",
+                        BattlePassErrorCodes.PurchaseAlreadyProcessed);
+                }
+
+                var pendingPurchase = await SavePurchaseAsync(
+                    existingPurchase,
+                    request.PlayerId,
+                    purchaseTokenHash,
+                    request.ProductId,
+                    request.ProductId,
+                    product.PurchaseType,
+                    PurchaseStatuses.GrantedFinalizationPending,
+                    verification.ProviderPayloadJson,
+                    verification.ErrorCode ?? BattlePassErrorCodes.PurchaseVerifyFailed,
+                    verification.ErrorMessage ?? "Purchase verification failed while finalization is pending.",
+                    existingPurchase.LinkedEntitlementId,
+                    finalizationMode,
+                    existingPurchase.FinalizationAttemptCount,
+                    existingPurchase.LastFinalizationAttemptAtUtcMs,
+                    existingPurchase.FinalizationErrorCode,
+                    existingPurchase.FinalizationErrorMessage,
+                    existingPurchase.FinalizedAtUtcMs,
+                    ct);
+
+                return await BuildPendingFinalizationResponseAsync(
+                    pendingPurchase,
+                    request.PlayerId,
+                    request.SeasonId,
+                    existingEntitlement,
+                    ct);
+            }
+
             var failed = await SavePurchaseAsync(
                 existingPurchase,
                 request.PlayerId,
@@ -144,6 +200,13 @@ public sealed class IapService : IIapService
                 verification.ProviderPayloadJson,
                 verification.ErrorCode ?? BattlePassErrorCodes.PurchaseVerifyFailed,
                 verification.ErrorMessage ?? "Purchase verification failed.",
+                existingPurchase?.LinkedEntitlementId,
+                finalizationMode,
+                existingPurchase?.FinalizationAttemptCount ?? 0,
+                existingPurchase?.LastFinalizationAttemptAtUtcMs,
+                existingPurchase?.FinalizationErrorCode,
+                existingPurchase?.FinalizationErrorMessage,
+                existingPurchase?.FinalizedAtUtcMs,
                 ct);
             await TryEnsureTokenIndexAsync(existingPurchase, failed, purchaseTokenHash, ct);
             _logger.LogWarning(
@@ -153,7 +216,9 @@ public sealed class IapService : IIapService
                 failed.ErrorCode,
                 failed.ErrorMessage,
                 purchaseTokenHash);
-            return BuildFailure(failed.ErrorMessage ?? "Purchase verification failed.", failed.ErrorCode ?? BattlePassErrorCodes.PurchaseVerifyFailed, failed.Status);
+            return BuildVerifyFailure(
+                failed.ErrorMessage ?? "Purchase verification failed.",
+                failed.ErrorCode ?? BattlePassErrorCodes.PurchaseVerifyFailed);
         }
 
         if (!string.IsNullOrWhiteSpace(verification.ProductId) &&
@@ -170,16 +235,69 @@ public sealed class IapService : IIapService
                 verification.ProviderPayloadJson,
                 BattlePassErrorCodes.PurchaseProductMismatch,
                 "Provider returned another product id.",
+                existingPurchase?.LinkedEntitlementId,
+                finalizationMode,
+                existingPurchase?.FinalizationAttemptCount ?? 0,
+                existingPurchase?.LastFinalizationAttemptAtUtcMs,
+                existingPurchase?.FinalizationErrorCode,
+                existingPurchase?.FinalizationErrorMessage,
+                existingPurchase?.FinalizedAtUtcMs,
                 ct);
             await TryEnsureTokenIndexAsync(existingPurchase, mismatch, purchaseTokenHash, ct);
             _logger.LogWarning(
-                "{EventName} RequestedProductId: {RequestedProductId}, ProviderProductId: {ProviderProductId}, PurchaseTokenHash: {PurchaseTokenHash}, ProviderPayloadJson: {ProviderPayloadJson}",
+                "{EventName} RequestedProductId: {RequestedProductId}, ProviderProductId: {ProviderProductId}, PurchaseTokenHash: {PurchaseTokenHash}",
                 BattlePassTelemetry.PurchaseFailed,
                 request.ProductId,
                 verification.ProductId,
+                purchaseTokenHash);
+            return BuildVerifyFailure("Provider returned another product id.", BattlePassErrorCodes.PurchaseProductMismatch);
+        }
+
+        if (IsProviderFinalized(verification, finalizationMode))
+        {
+            if (existingPurchase is null || string.IsNullOrWhiteSpace(existingPurchase.LinkedEntitlementId))
+            {
+                return BuildVerifyFailure(
+                    "Google Play reports the purchase is already finalized but the server has no trusted purchase record.",
+                    BattlePassErrorCodes.PurchaseAlreadyProcessed);
+            }
+
+            var entitlement = await _entitlementService.GetActiveBattlePassEntitlementAsync(request.PlayerId, request.SeasonId, nowUtcMs, ct);
+            if (entitlement is null)
+            {
+                return BuildVerifyFailure(
+                    "Google Play reports the purchase is already finalized but the entitlement is missing.",
+                    BattlePassErrorCodes.PurchaseAlreadyProcessed);
+            }
+
+            var finalizedPurchase = await SavePurchaseAsync(
+                existingPurchase,
+                request.PlayerId,
                 purchaseTokenHash,
-                verification.ProviderPayloadJson);
-            return BuildFailure("Provider returned another product id.", BattlePassErrorCodes.PurchaseProductMismatch, mismatch.Status);
+                request.ProductId,
+                request.ProductId,
+                product.PurchaseType,
+                GetFinalizedStatus(finalizationMode),
+                verification.ProviderPayloadJson,
+                null,
+                null,
+                existingPurchase.LinkedEntitlementId,
+                finalizationMode,
+                existingPurchase.FinalizationAttemptCount,
+                existingPurchase.LastFinalizationAttemptAtUtcMs,
+                null,
+                null,
+                existingPurchase.FinalizedAtUtcMs ?? nowUtcMs,
+                ct);
+
+            return await BuildSuccessResponseAsync(
+                request.PlayerId,
+                request.SeasonId,
+                entitlement,
+                GetSuccessPurchaseStatus(finalizedPurchase.Status),
+                GetGoogleFinalizeStatus(finalizedPurchase.Status),
+                isDuplicate: true,
+                ct);
         }
 
         var verificationStatus = verification.PurchaseState switch
@@ -189,6 +307,7 @@ public sealed class IapService : IIapService
             "revoked" => PurchaseStatuses.Revoked,
             _ => PurchaseStatuses.Verified
         };
+
         var purchase = await SavePurchaseAsync(
             existingPurchase,
             request.PlayerId,
@@ -200,6 +319,13 @@ public sealed class IapService : IIapService
             verification.ProviderPayloadJson,
             verificationStatus == PurchaseStatuses.Verified ? null : BattlePassErrorCodes.PurchaseNotPurchased,
             verificationStatus == PurchaseStatuses.Verified ? null : $"Provider purchase state is '{verification.PurchaseState}'.",
+            existingPurchase?.LinkedEntitlementId,
+            finalizationMode,
+            existingPurchase?.FinalizationAttemptCount ?? 0,
+            existingPurchase?.LastFinalizationAttemptAtUtcMs,
+            existingPurchase?.FinalizationErrorCode,
+            existingPurchase?.FinalizationErrorMessage,
+            existingPurchase?.FinalizedAtUtcMs,
             ct);
         await TryEnsureTokenIndexAsync(existingPurchase, purchase, purchaseTokenHash, ct);
 
@@ -217,52 +343,78 @@ public sealed class IapService : IIapService
                 purchase.Id,
                 verification.PurchaseState,
                 purchaseTokenHash);
-            return BuildFailure(purchase.ErrorMessage ?? "Purchase is not in purchased state.", errorCode, purchase.Status);
+            return BuildVerifyFailure(purchase.ErrorMessage ?? "Purchase is not in purchased state.", errorCode);
         }
 
-        var currentPassType = await _entitlementService.GetBattlePassPassTypeAsync(request.PlayerId, request.SeasonId, nowUtcMs, ct);
-        if (!CanGrantPass(currentPassType, requestedPassType))
+        var hasGrantedEntitlement = existingPurchase is not null &&
+                                    !string.IsNullOrWhiteSpace(existingPurchase.LinkedEntitlementId) &&
+                                    IsPendingFinalization(existingPurchase, finalizationMode);
+
+        UserEntitlementRecord? entitlementRecord;
+        if (hasGrantedEntitlement)
         {
-            return BuildFailure("Player already owns the same or better pass.", BattlePassErrorCodes.PassAlreadyOwned, purchase.Status);
+            entitlementRecord = await _entitlementService.GetActiveBattlePassEntitlementAsync(request.PlayerId, request.SeasonId, nowUtcMs, ct);
+            if (entitlementRecord is null)
+            {
+                return BuildVerifyFailure(
+                    "Purchase finalization is pending but the linked entitlement is missing.",
+                    BattlePassErrorCodes.PurchaseAlreadyProcessed);
+            }
         }
-
-        _logger.LogInformation(
-            "{EventName} PurchaseId: {PurchaseId}, PurchaseTokenHash: {PurchaseTokenHash}, ProductId: {ProductId}",
-            BattlePassTelemetry.PurchaseVerified,
-            purchase.Id,
-            purchaseTokenHash,
-            request.ProductId);
-
-        await using var battlePassLock = await _distributedLockService.AcquireAsync(
-            $"bp:{request.PlayerId}:{request.SeasonId}",
-            TimeSpan.FromSeconds(20),
-            ct);
-
-        var entitlementResult = await _entitlementService.GrantBattlePassEntitlementAsync(
-            request.PlayerId,
-            request.SeasonId,
-            requestedPassType,
-            EntitlementSourceTypes.Purchase,
-            purchase.Id,
-            ct);
-        if (!entitlementResult.Success || entitlementResult.Entitlement is null)
+        else
         {
-            var failedPurchase = await SavePurchaseAsync(
-                purchase,
-                request.PlayerId,
+            var currentPassType = await _entitlementService.GetBattlePassPassTypeAsync(request.PlayerId, request.SeasonId, nowUtcMs, ct);
+            if (!CanGrantPass(currentPassType, requestedPassType))
+            {
+                return BuildVerifyFailure("Player already owns the same or better pass.", BattlePassErrorCodes.PassAlreadyOwned);
+            }
+
+            _logger.LogInformation(
+                "{EventName} PurchaseId: {PurchaseId}, PurchaseTokenHash: {PurchaseTokenHash}, ProductId: {ProductId}",
+                BattlePassTelemetry.PurchaseVerified,
+                purchase.Id,
                 purchaseTokenHash,
-                request.ProductId,
-                request.ProductId,
-                product.PurchaseType,
-                PurchaseStatuses.Failed,
-                verification.ProviderPayloadJson,
-                entitlementResult.ErrorCode ?? BattlePassErrorCodes.PassAlreadyOwned,
-                entitlementResult.ErrorMessage ?? "Entitlement grant failed.",
+                request.ProductId);
+
+            await using var battlePassLock = await _distributedLockService.AcquireAsync(
+                $"bp:{request.PlayerId}:{request.SeasonId}",
+                TimeSpan.FromSeconds(20),
                 ct);
-            return BuildFailure(
-                failedPurchase.ErrorMessage ?? "Entitlement grant failed.",
-                failedPurchase.ErrorCode ?? BattlePassErrorCodes.PassAlreadyOwned,
-                failedPurchase.Status);
+
+            var entitlementResult = await _entitlementService.GrantBattlePassEntitlementAsync(
+                request.PlayerId,
+                request.SeasonId,
+                requestedPassType,
+                EntitlementSourceTypes.Purchase,
+                purchase.Id,
+                ct);
+            if (!entitlementResult.Success || entitlementResult.Entitlement is null)
+            {
+                var failedPurchase = await SavePurchaseAsync(
+                    purchase,
+                    request.PlayerId,
+                    purchaseTokenHash,
+                    request.ProductId,
+                    request.ProductId,
+                    product.PurchaseType,
+                    PurchaseStatuses.Failed,
+                    verification.ProviderPayloadJson,
+                    entitlementResult.ErrorCode ?? BattlePassErrorCodes.PassAlreadyOwned,
+                    entitlementResult.ErrorMessage ?? "Entitlement grant failed.",
+                    purchase.LinkedEntitlementId,
+                    finalizationMode,
+                    purchase.FinalizationAttemptCount,
+                    purchase.LastFinalizationAttemptAtUtcMs,
+                    purchase.FinalizationErrorCode,
+                    purchase.FinalizationErrorMessage,
+                    purchase.FinalizedAtUtcMs,
+                    ct);
+                return BuildVerifyFailure(
+                    failedPurchase.ErrorMessage ?? "Entitlement grant failed.",
+                    failedPurchase.ErrorCode ?? BattlePassErrorCodes.PassAlreadyOwned);
+            }
+
+            entitlementRecord = entitlementResult.Entitlement;
         }
 
         purchase = await SavePurchaseAsync(
@@ -272,86 +424,168 @@ public sealed class IapService : IIapService
             request.ProductId,
             request.ProductId,
             product.PurchaseType,
-            verification.IsAcknowledged ? PurchaseStatuses.Acknowledged : PurchaseStatuses.Granted,
+            PurchaseStatuses.GrantedFinalizationPending,
             verification.ProviderPayloadJson,
             null,
             null,
-            ct,
-            entitlementResult.Entitlement.Id);
+            entitlementRecord.Id,
+            finalizationMode,
+            purchase.FinalizationAttemptCount,
+            purchase.LastFinalizationAttemptAtUtcMs,
+            purchase.FinalizationErrorCode,
+            purchase.FinalizationErrorMessage,
+            purchase.FinalizedAtUtcMs,
+            ct);
 
-        if (!verification.IsAcknowledged)
+        return await FinalizePurchaseAsync(
+            purchase,
+            request.PlayerId,
+            request.SeasonId,
+            request.PurchaseToken,
+            entitlementRecord,
+            ct);
+    }
+
+    private async Task<VerifyGooglePurchaseResponse> FinalizePurchaseAsync(
+        PurchaseRecord purchase,
+        string playerId,
+        string seasonId,
+        string purchaseToken,
+        UserEntitlementRecord entitlement,
+        CancellationToken ct)
+    {
+        var finalizationAttemptAtUtcMs = _clock.UtcNowUnixMilliseconds;
+        var finalizationAttemptCount = purchase.FinalizationAttemptCount + 1;
+
+        if (string.Equals(purchase.FinalizationMode, PurchaseFinalizationModes.Consume, StringComparison.Ordinal))
         {
-            _logger.LogInformation(
-                "Purchase requires acknowledge. ProductId: {ProductId}, SeasonId: {SeasonId}, PurchaseId: {PurchaseId}, PurchaseTokenHash: {PurchaseTokenHash}, VerifierType: {VerifierType}",
-                request.ProductId,
-                request.SeasonId,
-                purchase.Id,
-                purchaseTokenHash,
-                _googlePlayPurchaseVerifier.GetType().Name);
-            var acknowledge = await _googlePlayPurchaseVerifier.AcknowledgeAsync(request.ProductId, request.PurchaseToken, ct);
-            if (!acknowledge.Success)
+            var consume = await _googlePlayPurchaseVerifier.ConsumeAsync(purchase.ProductId, purchaseToken, ct);
+            if (!consume.Success)
             {
-                var grantedPurchase = await SavePurchaseAsync(
+                var pendingPurchase = await SavePurchaseAsync(
                     purchase,
-                    request.PlayerId,
-                    purchaseTokenHash,
-                    request.ProductId,
-                    request.ProductId,
-                    product.PurchaseType,
-                    PurchaseStatuses.Granted,
-                    acknowledge.ProviderPayloadJson,
-                    acknowledge.ErrorCode ?? BattlePassErrorCodes.PurchaseAcknowledgeFailed,
-                    acknowledge.ErrorMessage ?? "Purchase acknowledge failed.",
-                    ct,
-                    entitlementResult.Entitlement.Id);
+                    playerId,
+                    purchase.PurchaseTokenHash,
+                    purchase.ProductId,
+                    purchase.ProductId,
+                    purchase.PurchaseType,
+                    PurchaseStatuses.GrantedFinalizationPending,
+                    consume.ProviderPayloadJson,
+                    consume.ErrorCode ?? BattlePassErrorCodes.PurchaseConsumeFailed,
+                    consume.ErrorMessage ?? "Purchase consume failed.",
+                    entitlement.Id,
+                    purchase.FinalizationMode,
+                    finalizationAttemptCount,
+                    finalizationAttemptAtUtcMs,
+                    consume.ErrorCode ?? BattlePassErrorCodes.PurchaseConsumeFailed,
+                    consume.ErrorMessage ?? "Purchase consume failed.",
+                    null,
+                    ct);
                 _logger.LogWarning(
                     "{EventName} PurchaseId: {PurchaseId}, ErrorCode: {ErrorCode}, PurchaseTokenHash: {PurchaseTokenHash}",
                     BattlePassTelemetry.PurchaseFailed,
-                    grantedPurchase.Id,
-                    grantedPurchase.ErrorCode,
-                    purchaseTokenHash);
-                return new VerifyGooglePurchaseResponse
-                {
-                    Success = false,
-                    PurchaseStatus = grantedPurchase.Status,
-                    Entitlement = new PurchaseEntitlementDto
-                    {
-                        Type = entitlementResult.Entitlement.EntitlementType,
-                        Key = entitlementResult.Entitlement.EntitlementKey,
-                        Status = entitlementResult.Entitlement.Status
-                    },
-                    BattlePass = await _battlePassService.GetSeasonStateAsync(request.PlayerId, request.SeasonId, ct),
-                    ErrorCode = grantedPurchase.ErrorCode,
-                    ErrorMessage = grantedPurchase.ErrorMessage
-                };
+                    pendingPurchase.Id,
+                    pendingPurchase.ErrorCode,
+                    purchase.PurchaseTokenHash);
+                return await BuildPendingFinalizationResponseAsync(
+                    pendingPurchase,
+                    playerId,
+                    seasonId,
+                    entitlement,
+                    ct);
             }
 
-            purchase = await SavePurchaseAsync(
+            var consumedPurchase = await SavePurchaseAsync(
                 purchase,
-                request.PlayerId,
-                purchaseTokenHash,
-                request.ProductId,
-                request.ProductId,
-                product.PurchaseType,
-                PurchaseStatuses.Acknowledged,
-                acknowledge.ProviderPayloadJson,
+                playerId,
+                purchase.PurchaseTokenHash,
+                purchase.ProductId,
+                purchase.ProductId,
+                purchase.PurchaseType,
+                PurchaseStatuses.Consumed,
+                consume.ProviderPayloadJson,
                 null,
                 null,
-                ct,
-                entitlementResult.Entitlement.Id);
-            _logger.LogInformation(
-                "Purchase acknowledge succeeded. ProductId: {ProductId}, SeasonId: {SeasonId}, PurchaseId: {PurchaseId}, PurchaseTokenHash: {PurchaseTokenHash}",
-                request.ProductId,
-                request.SeasonId,
-                purchase.Id,
-                purchaseTokenHash);
+                entitlement.Id,
+                purchase.FinalizationMode,
+                finalizationAttemptCount,
+                finalizationAttemptAtUtcMs,
+                null,
+                null,
+                finalizationAttemptAtUtcMs,
+                ct);
+            return await BuildSuccessResponseAsync(
+                playerId,
+                seasonId,
+                entitlement,
+                VerifyGooglePurchaseStatuses.VerifiedAndConsumed,
+                GooglePlayFinalizeStatuses.Consumed,
+                isDuplicate: false,
+                ct);
         }
 
+        var acknowledge = await _googlePlayPurchaseVerifier.AcknowledgeAsync(purchase.ProductId, purchaseToken, ct);
+        if (!acknowledge.Success)
+        {
+            var pendingPurchase = await SavePurchaseAsync(
+                purchase,
+                playerId,
+                purchase.PurchaseTokenHash,
+                purchase.ProductId,
+                purchase.ProductId,
+                purchase.PurchaseType,
+                PurchaseStatuses.GrantedFinalizationPending,
+                acknowledge.ProviderPayloadJson,
+                acknowledge.ErrorCode ?? BattlePassErrorCodes.PurchaseAcknowledgeFailed,
+                acknowledge.ErrorMessage ?? "Purchase acknowledge failed.",
+                entitlement.Id,
+                purchase.FinalizationMode,
+                finalizationAttemptCount,
+                finalizationAttemptAtUtcMs,
+                acknowledge.ErrorCode ?? BattlePassErrorCodes.PurchaseAcknowledgeFailed,
+                acknowledge.ErrorMessage ?? "Purchase acknowledge failed.",
+                null,
+                ct);
+            _logger.LogWarning(
+                "{EventName} PurchaseId: {PurchaseId}, ErrorCode: {ErrorCode}, PurchaseTokenHash: {PurchaseTokenHash}",
+                BattlePassTelemetry.PurchaseFailed,
+                pendingPurchase.Id,
+                pendingPurchase.ErrorCode,
+                purchase.PurchaseTokenHash);
+            return await BuildPendingFinalizationResponseAsync(
+                pendingPurchase,
+                playerId,
+                seasonId,
+                entitlement,
+                ct);
+        }
+
+        await SavePurchaseAsync(
+            purchase,
+            playerId,
+            purchase.PurchaseTokenHash,
+            purchase.ProductId,
+            purchase.ProductId,
+            purchase.PurchaseType,
+            PurchaseStatuses.Acknowledged,
+            acknowledge.ProviderPayloadJson,
+            null,
+            null,
+            entitlement.Id,
+            purchase.FinalizationMode,
+            finalizationAttemptCount,
+            finalizationAttemptAtUtcMs,
+            null,
+            null,
+            finalizationAttemptAtUtcMs,
+            ct);
         return await BuildSuccessResponseAsync(
-            purchase.Status,
-            request.PlayerId,
-            request.SeasonId,
-            entitlementResult.Entitlement,
+            playerId,
+            seasonId,
+            entitlement,
+            VerifyGooglePurchaseStatuses.VerifiedAndAcknowledged,
+            GooglePlayFinalizeStatuses.Acknowledged,
+            isDuplicate: false,
             ct);
     }
 
@@ -366,8 +600,14 @@ public sealed class IapService : IIapService
         string providerPayloadJson,
         string? errorCode,
         string? errorMessage,
-        CancellationToken ct,
-        string? linkedEntitlementId = null)
+        string? linkedEntitlementId,
+        string finalizationMode,
+        int finalizationAttemptCount,
+        long? lastFinalizationAttemptAtUtcMs,
+        string? finalizationErrorCode,
+        string? finalizationErrorMessage,
+        long? finalizedAtUtcMs,
+        CancellationToken ct)
     {
         var nowUtcMs = _clock.UtcNowUnixMilliseconds;
         var purchase = new PurchaseRecord
@@ -379,6 +619,14 @@ public sealed class IapService : IIapService
             PurchaseTokenHash = purchaseTokenHash,
             Status = status,
             PurchaseType = existingPurchase?.PurchaseType ?? purchaseType,
+            FinalizationMode = string.IsNullOrWhiteSpace(existingPurchase?.FinalizationMode)
+                ? finalizationMode
+                : existingPurchase.FinalizationMode,
+            FinalizationAttemptCount = finalizationAttemptCount,
+            LastFinalizationAttemptAtUtcMs = lastFinalizationAttemptAtUtcMs,
+            FinalizationErrorCode = finalizationErrorCode,
+            FinalizationErrorMessage = finalizationErrorMessage,
+            FinalizedAtUtcMs = finalizedAtUtcMs,
             LinkedEntitlementId = linkedEntitlementId ?? existingPurchase?.LinkedEntitlementId,
             ProviderPayloadJson = string.IsNullOrWhiteSpace(providerPayloadJson) ? existingPurchase?.ProviderPayloadJson ?? "{}" : providerPayloadJson,
             ErrorCode = errorCode,
@@ -415,25 +663,50 @@ public sealed class IapService : IIapService
     }
 
     private async Task<VerifyGooglePurchaseResponse> BuildSuccessResponseAsync(
-        string purchaseStatus,
         string playerId,
         string seasonId,
-        UserEntitlementRecord? entitlement,
+        UserEntitlementRecord entitlement,
+        string purchaseStatus,
+        string googleFinalizeStatus,
+        bool isDuplicate,
         CancellationToken ct)
     {
         return new VerifyGooglePurchaseResponse
         {
             Success = true,
-            PurchaseStatus = purchaseStatus,
-            Entitlement = entitlement is null
-                ? null
-                : new PurchaseEntitlementDto
-                {
-                    Type = entitlement.EntitlementType,
-                    Key = entitlement.EntitlementKey,
-                    Status = entitlement.Status
-                },
+            PurchaseStatus = isDuplicate ? VerifyGooglePurchaseStatuses.DuplicateAlreadyProcessed : purchaseStatus,
+            GoogleFinalizeStatus = googleFinalizeStatus,
+            Entitlement = BuildEntitlementDto(entitlement),
             BattlePass = await _battlePassService.GetSeasonStateAsync(playerId, seasonId, ct)
+        };
+    }
+
+    private async Task<VerifyGooglePurchaseResponse> BuildPendingFinalizationResponseAsync(
+        PurchaseRecord purchase,
+        string playerId,
+        string seasonId,
+        UserEntitlementRecord entitlement,
+        CancellationToken ct)
+    {
+        return new VerifyGooglePurchaseResponse
+        {
+            Success = false,
+            PurchaseStatus = VerifyGooglePurchaseStatuses.GrantedButFinalizationPending,
+            GoogleFinalizeStatus = GooglePlayFinalizeStatuses.FinalizationPendingManual,
+            Entitlement = BuildEntitlementDto(entitlement),
+            BattlePass = await _battlePassService.GetSeasonStateAsync(playerId, seasonId, ct),
+            ErrorCode = purchase.ErrorCode ?? purchase.FinalizationErrorCode ?? BattlePassErrorCodes.PurchaseFinalizationPending,
+            ErrorMessage = purchase.ErrorMessage ?? purchase.FinalizationErrorMessage ?? "Purchase finalization is pending manual retry."
+        };
+    }
+
+    private static PurchaseEntitlementDto BuildEntitlementDto(UserEntitlementRecord entitlement)
+    {
+        return new PurchaseEntitlementDto
+        {
+            Type = entitlement.EntitlementType,
+            Key = entitlement.EntitlementKey,
+            Status = entitlement.Status
         };
     }
 
@@ -452,15 +725,68 @@ public sealed class IapService : IIapService
         return false;
     }
 
-    private static VerifyGooglePurchaseResponse BuildFailure(
+    private static string GetFinalizedStatus(string finalizationMode)
+    {
+        return string.Equals(finalizationMode, PurchaseFinalizationModes.Consume, StringComparison.Ordinal)
+            ? PurchaseStatuses.Consumed
+            : PurchaseStatuses.Acknowledged;
+    }
+
+    private static string GetSuccessPurchaseStatus(string internalStatus)
+    {
+        return string.Equals(internalStatus, PurchaseStatuses.Consumed, StringComparison.Ordinal)
+            ? VerifyGooglePurchaseStatuses.VerifiedAndConsumed
+            : VerifyGooglePurchaseStatuses.VerifiedAndAcknowledged;
+    }
+
+    private static string GetGoogleFinalizeStatus(string internalStatus)
+    {
+        return string.Equals(internalStatus, PurchaseStatuses.Consumed, StringComparison.Ordinal)
+            ? GooglePlayFinalizeStatuses.Consumed
+            : GooglePlayFinalizeStatuses.Acknowledged;
+    }
+
+    private static bool IsProviderFinalized(GooglePlayPurchaseVerificationResult verification, string finalizationMode)
+    {
+        return string.Equals(finalizationMode, PurchaseFinalizationModes.Consume, StringComparison.Ordinal)
+            ? verification.IsConsumed
+            : verification.IsAcknowledged;
+    }
+
+    private static bool IsPurchaseFinalized(PurchaseRecord purchase, string finalizationMode)
+    {
+        return string.Equals(finalizationMode, PurchaseFinalizationModes.Consume, StringComparison.Ordinal)
+            ? string.Equals(purchase.Status, PurchaseStatuses.Consumed, StringComparison.Ordinal)
+            : string.Equals(purchase.Status, PurchaseStatuses.Acknowledged, StringComparison.Ordinal);
+    }
+
+    private static bool IsPendingFinalization(PurchaseRecord purchase, string finalizationMode)
+    {
+        if (string.Equals(purchase.Status, PurchaseStatuses.GrantedFinalizationPending, StringComparison.Ordinal) ||
+            string.Equals(purchase.Status, PurchaseStatuses.Granted, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return string.Equals(finalizationMode, PurchaseFinalizationModes.Consume, StringComparison.Ordinal) &&
+               string.Equals(purchase.Status, PurchaseStatuses.Acknowledged, StringComparison.Ordinal);
+    }
+
+    private static bool IsSupportedFinalizationMode(string finalizationMode)
+    {
+        return string.Equals(finalizationMode, PurchaseFinalizationModes.Consume, StringComparison.Ordinal) ||
+               string.Equals(finalizationMode, PurchaseFinalizationModes.Acknowledge, StringComparison.Ordinal);
+    }
+
+    private static VerifyGooglePurchaseResponse BuildVerifyFailure(
         string errorMessage,
-        string errorCode = BattlePassErrorCodes.ValidationError,
-        string purchaseStatus = PurchaseStatuses.Failed)
+        string errorCode = BattlePassErrorCodes.ValidationError)
     {
         return new VerifyGooglePurchaseResponse
         {
             Success = false,
-            PurchaseStatus = purchaseStatus,
+            PurchaseStatus = VerifyGooglePurchaseStatuses.VerifyFailed,
+            GoogleFinalizeStatus = GooglePlayFinalizeStatuses.NotAttempted,
             ErrorCode = errorCode,
             ErrorMessage = errorMessage
         };
