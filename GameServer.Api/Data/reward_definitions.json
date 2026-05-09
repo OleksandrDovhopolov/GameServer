@@ -245,6 +245,66 @@
                                           "category":  "ad_spin"
                                       }
                                   ]
+                    },
+                    {
+                        "rewardId":  "red_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "red_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "blue_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "blue_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "green_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "green_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "purple_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "purple_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "gold_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "gold_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
                     }
                 ]
 }

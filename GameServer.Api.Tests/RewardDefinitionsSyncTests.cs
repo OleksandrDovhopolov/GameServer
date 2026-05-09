@@ -24,7 +24,12 @@ public sealed class RewardDefinitionsSyncTests
             "Emerald_Pack",
             "Sapphire_Pack",
             "Ruby_Pack",
-            "fortune_wheel_ad_spin"
+            "fortune_wheel_ad_spin",
+            "red_lure",
+            "blue_lure",
+            "green_lure",
+            "purple_lure",
+            "gold_lure"
         };
 
         var actualRewardIds = definitions.Rewards
