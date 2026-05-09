@@ -25,11 +25,11 @@ public sealed class RewardDefinitionsSyncTests
             "Sapphire_Pack",
             "Ruby_Pack",
             "fortune_wheel_ad_spin",
-            "red_lure",
-            "blue_lure",
-            "green_lure",
-            "purple_lure",
-            "gold_lure"
+            "item_red_lure",
+            "item_blue_lure",
+            "item_green_lure",
+            "item_purple_lure",
+            "item_gold_lure"
         };
 
         var actualRewardIds = definitions.Rewards
