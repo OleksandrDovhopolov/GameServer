@@ -1,4 +1,5 @@
 using GameServer.Api.Models.Dto.BattlePass;
+using GameServer.Api.Models.Dto.Iap;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -139,5 +140,11 @@ public sealed class BattlePassController : ControllerBase
                 ErrorMessage = ex.Message
             });
         }
+    }
+    
+    [HttpPost("/dev/grant-battle-pass")]
+    public async Task<ActionResult<VerifyGooglePurchaseResponse>> Verify([FromBody] VerifyGooglePurchaseRequest request, CancellationToken ct)
+    {
+        return BadRequest("Verify endpoint works, but verification is not implemented yet.");
     }
 }
