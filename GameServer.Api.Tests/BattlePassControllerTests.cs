@@ -1,5 +1,8 @@
 using GameServer.Api.Controllers;
+using GameServer.Api.Models.Domain.BattlePass;
+using GameServer.Api.Models.Dto.Admin;
 using GameServer.Api.Models.Dto.BattlePass;
+using GameServer.Api.Models.Dto.Iap;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
@@ -152,11 +155,174 @@ public sealed class BattlePassControllerTests
         Assert.Equal(GameServer.Api.Services.BattlePassErrorCodes.NoActiveSeason, response.ErrorCode);
     }
 
+    [Fact]
+    public async Task VerifyDevGrant_WhenSuccess_ReturnsOkVerifyResponse()
+    {
+        var controller = new BattlePassController(
+            new StubBattlePassService
+            {
+                SeasonStateResponse = new BattlePassStateDto
+                {
+                    SeasonId = "season_1",
+                    PassType = BattlePassPassTypes.Premium
+                }
+            },
+            new StubBattlePassAdminService
+            {
+                GrantEntitlementResponse = new BattlePassAdminOperationResponse
+                {
+                    Success = true,
+                    Entitlement = new UserEntitlementRecord
+                    {
+                        EntitlementType = EntitlementTypes.BattlePass,
+                        EntitlementKey = "battle_pass_premium_season_1",
+                        Status = EntitlementStatuses.Active
+                    }
+                }
+            });
+
+        var result = await controller.Verify(new VerifyGooglePurchaseRequest
+        {
+            PlayerId = "p1",
+            SeasonId = "season_1",
+            ProductId = "ignored",
+            PurchaseToken = "ignored"
+        }, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<VerifyGooglePurchaseResponse>(ok.Value);
+        Assert.True(response.Success);
+        Assert.Equal(VerifyGooglePurchaseStatuses.VerifiedAndConsumed, response.PurchaseStatus);
+        Assert.Equal(GooglePlayFinalizeStatuses.NotApplicable, response.GoogleFinalizeStatus);
+        Assert.NotNull(response.Entitlement);
+        Assert.NotNull(response.BattlePass);
+        Assert.Equal(BattlePassPassTypes.Premium, response.BattlePass.PassType);
+    }
+
+    [Fact]
+    public async Task VerifyDevGrant_WhenPassAlreadyOwned_ReturnsIdempotentSuccess()
+    {
+        var controller = new BattlePassController(
+            new StubBattlePassService
+            {
+                SeasonStateResponse = new BattlePassStateDto
+                {
+                    SeasonId = "season_1",
+                    PassType = BattlePassPassTypes.Premium
+                }
+            },
+            new StubBattlePassAdminService
+            {
+                GrantEntitlementResponse = new BattlePassAdminOperationResponse
+                {
+                    Success = false,
+                    ErrorCode = GameServer.Api.Services.BattlePassErrorCodes.PassAlreadyOwned,
+                    ErrorMessage = "already owned"
+                }
+            });
+
+        var result = await controller.Verify(new VerifyGooglePurchaseRequest
+        {
+            PlayerId = "p1",
+            SeasonId = "season_1"
+        }, CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result.Result);
+        var response = Assert.IsType<VerifyGooglePurchaseResponse>(ok.Value);
+        Assert.True(response.Success);
+        Assert.Equal(VerifyGooglePurchaseStatuses.DuplicateAlreadyProcessed, response.PurchaseStatus);
+        Assert.Equal(GooglePlayFinalizeStatuses.NotApplicable, response.GoogleFinalizeStatus);
+        Assert.Equal("battle_pass_premium_season_1", response.Entitlement!.Key);
+    }
+
+    [Fact]
+    public async Task VerifyDevGrant_WhenPlayerMissing_ReturnsNotFoundVerifyResponse()
+    {
+        var controller = new BattlePassController(
+            new StubBattlePassService(),
+            new StubBattlePassAdminService
+            {
+                GrantEntitlementResponse = new BattlePassAdminOperationResponse
+                {
+                    Success = false,
+                    ErrorCode = GameServer.Api.Services.BattlePassErrorCodes.PlayerNotFound,
+                    ErrorMessage = "missing"
+                }
+            });
+
+        var result = await controller.Verify(new VerifyGooglePurchaseRequest
+        {
+            PlayerId = "p1",
+            SeasonId = "season_1"
+        }, CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result.Result);
+        var response = Assert.IsType<VerifyGooglePurchaseResponse>(notFound.Value);
+        Assert.False(response.Success);
+        Assert.Equal(GameServer.Api.Services.BattlePassErrorCodes.PlayerNotFound, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task VerifyDevGrant_WhenSeasonMissing_ReturnsNotFoundVerifyResponse()
+    {
+        var controller = new BattlePassController(
+            new StubBattlePassService(),
+            new StubBattlePassAdminService
+            {
+                GrantEntitlementResponse = new BattlePassAdminOperationResponse
+                {
+                    Success = false,
+                    ErrorCode = GameServer.Api.Services.BattlePassErrorCodes.SeasonNotFound,
+                    ErrorMessage = "missing"
+                }
+            });
+
+        var result = await controller.Verify(new VerifyGooglePurchaseRequest
+        {
+            PlayerId = "p1",
+            SeasonId = "season_1"
+        }, CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result.Result);
+        var response = Assert.IsType<VerifyGooglePurchaseResponse>(notFound.Value);
+        Assert.False(response.Success);
+        Assert.Equal(GameServer.Api.Services.BattlePassErrorCodes.SeasonNotFound, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task VerifyDevGrant_WhenValidationFails_ReturnsBadRequestVerifyResponse()
+    {
+        var controller = new BattlePassController(
+            new StubBattlePassService(),
+            new StubBattlePassAdminService
+            {
+                GrantEntitlementResponse = new BattlePassAdminOperationResponse
+                {
+                    Success = false,
+                    ErrorCode = GameServer.Api.Services.BattlePassErrorCodes.ValidationError,
+                    ErrorMessage = "bad request"
+                }
+            });
+
+        var result = await controller.Verify(new VerifyGooglePurchaseRequest
+        {
+            PlayerId = "p1",
+            SeasonId = "season_1"
+        }, CancellationToken.None);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
+        var response = Assert.IsType<VerifyGooglePurchaseResponse>(badRequest.Value);
+        Assert.False(response.Success);
+        Assert.Equal(VerifyGooglePurchaseStatuses.VerifyFailed, response.PurchaseStatus);
+        Assert.Equal(GameServer.Api.Services.BattlePassErrorCodes.ValidationError, response.ErrorCode);
+    }
+
     private sealed class StubBattlePassService : IBattlePassService
     {
         public Exception? CurrentException { get; init; }
         public BattlePassClaimResponse ClaimResponse { get; init; } = new() { Success = true };
         public BattlePassStateDto AddXpToCurrentSeasonResponse { get; init; } = new() { SeasonId = "season_1" };
+        public BattlePassStateDto SeasonStateResponse { get; init; } = new() { SeasonId = "season_1", PassType = BattlePassPassTypes.None };
         public Exception? AddXpException { get; init; }
 
         public Task<BattlePassCurrentResponse> GetCurrentAsync(string playerId, CancellationToken ct = default)
@@ -176,7 +342,15 @@ public sealed class BattlePassControllerTests
         public Task<BattlePassClaimResponse> ClaimAllAsync(ClaimAllBattlePassRewardsRequest request, CancellationToken ct = default) => Task.FromResult(ClaimResponse);
 
         public Task<BattlePassStateDto> GetSeasonStateAsync(string playerId, string seasonId, CancellationToken ct = default)
-            => Task.FromResult(new BattlePassStateDto { SeasonId = seasonId });
+            => Task.FromResult(new BattlePassStateDto
+            {
+                SeasonId = seasonId,
+                Level = SeasonStateResponse.Level,
+                Xp = SeasonStateResponse.Xp,
+                PassType = SeasonStateResponse.PassType,
+                ClaimedRewards = SeasonStateResponse.ClaimedRewards,
+                ClaimableRewards = SeasonStateResponse.ClaimableRewards
+            });
 
         public Task<BattlePassStateDto> AddXpToCurrentSeasonAsync(string playerId, int amount, CancellationToken ct = default)
         {
@@ -190,5 +364,46 @@ public sealed class BattlePassControllerTests
 
         public Task<BattlePassStateDto> AddXpAsync(string playerId, string seasonId, int amount, string source, CancellationToken ct = default)
             => Task.FromResult(new BattlePassStateDto { SeasonId = seasonId });
+    }
+
+    private sealed class StubBattlePassAdminService : IBattlePassAdminService
+    {
+        public BattlePassAdminOperationResponse GrantEntitlementResponse { get; init; } = new() { Success = true };
+
+        public Task<BattlePassAdminOperationResponse> CreateSeasonAsync(CreateBattlePassSeasonRequest request, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> UpdateSeasonAsync(string seasonId, UpdateBattlePassSeasonRequest request, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> UpsertLevelsAsync(string seasonId, UpsertBattlePassLevelsRequest request, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> PublishSeasonAsync(string seasonId, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> ArchiveSeasonAsync(string seasonId, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> RecreateSeasonAsync(RecreateBattlePassSeasonRequest request, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> ResetPlayerProgressAsync(ResetBattlePassPlayerRequest request, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> GrantEntitlementAsync(AdminGrantEntitlementRequest request, CancellationToken ct = default)
+            => Task.FromResult(GrantEntitlementResponse);
+
+        public Task<BattlePassAdminOperationResponse> RevokeEntitlementAsync(AdminRevokeEntitlementRequest request, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> GetPlayerStateAsync(string playerId, string? seasonId, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> GetPurchaseAsync(string purchaseId, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
+
+        public Task<BattlePassAdminOperationResponse> RetryPurchaseFinalizationAsync(string purchaseId, AdminRetryPurchaseFinalizationRequest request, CancellationToken ct = default)
+            => Task.FromResult(new BattlePassAdminOperationResponse { Success = true });
     }
 }

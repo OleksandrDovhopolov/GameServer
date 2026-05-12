@@ -1,5 +1,7 @@
+using GameServer.Api.Models.Dto.Admin;
 using GameServer.Api.Models.Dto.BattlePass;
 using GameServer.Api.Models.Dto.Iap;
+using GameServer.Api.Models.Domain.BattlePass;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +13,12 @@ namespace GameServer.Api.Controllers;
 public sealed class BattlePassController : ControllerBase
 {
     private readonly IBattlePassService _battlePassService;
+    private readonly IBattlePassAdminService? _battlePassAdminService;
 
-    public BattlePassController(IBattlePassService battlePassService)
+    public BattlePassController(IBattlePassService battlePassService, IBattlePassAdminService? battlePassAdminService = default)
     {
         _battlePassService = battlePassService;
+        _battlePassAdminService = battlePassAdminService;
     }
 
     [HttpGet("current")]
@@ -145,6 +149,108 @@ public sealed class BattlePassController : ControllerBase
     [HttpPost("dev/grant-battle-pass")]
     public async Task<ActionResult<VerifyGooglePurchaseResponse>> Verify([FromBody] VerifyGooglePurchaseRequest request, CancellationToken ct)
     {
-        return BadRequest("Verify endpoint works, but verification is not implemented yet.");
+        ArgumentNullException.ThrowIfNull(_battlePassAdminService);
+
+        var stubRequest = new AdminGrantEntitlementRequest
+        {
+            PlayerId = request.PlayerId,
+            SeasonId = request.SeasonId,
+            PassType = BattlePassPassTypes.Premium
+        };
+
+        var response = await _battlePassAdminService.GrantEntitlementAsync(stubRequest, ct);
+        if (response.Success)
+        {
+            return Ok(await BuildSuccessResponseAsync(
+                request.PlayerId,
+                request.SeasonId,
+                response.Entitlement!,
+                VerifyGooglePurchaseStatuses.VerifiedAndConsumed,
+                ct));
+        }
+
+        if (string.Equals(response.ErrorCode, BattlePassErrorCodes.PassAlreadyOwned, StringComparison.Ordinal))
+        {
+            var battlePass = await _battlePassService.GetSeasonStateAsync(request.PlayerId, request.SeasonId, ct);
+            return Ok(BuildDuplicateSuccessResponse(battlePass));
+        }
+
+        return ToActionResult(BuildFailureResponse(response));
+    }
+
+    private async Task<VerifyGooglePurchaseResponse> BuildSuccessResponseAsync(
+        string playerId,
+        string seasonId,
+        UserEntitlementRecord entitlement,
+        string purchaseStatus,
+        CancellationToken ct)
+    {
+        return new VerifyGooglePurchaseResponse
+        {
+            Success = true,
+            PurchaseStatus = purchaseStatus,
+            GoogleFinalizeStatus = GooglePlayFinalizeStatuses.NotApplicable,
+            Entitlement = BuildEntitlementDto(entitlement),
+            BattlePass = await _battlePassService.GetSeasonStateAsync(playerId, seasonId, ct)
+        };
+    }
+
+    private static VerifyGooglePurchaseResponse BuildDuplicateSuccessResponse(BattlePassStateDto battlePass)
+    {
+        return new VerifyGooglePurchaseResponse
+        {
+            Success = true,
+            PurchaseStatus = VerifyGooglePurchaseStatuses.DuplicateAlreadyProcessed,
+            GoogleFinalizeStatus = GooglePlayFinalizeStatuses.NotApplicable,
+            Entitlement = BuildEntitlementDto(battlePass),
+            BattlePass = battlePass
+        };
+    }
+
+    private static PurchaseEntitlementDto BuildEntitlementDto(UserEntitlementRecord entitlement)
+    {
+        return new PurchaseEntitlementDto
+        {
+            Type = entitlement.EntitlementType,
+            Key = entitlement.EntitlementKey,
+            Status = entitlement.Status
+        };
+    }
+
+    private static PurchaseEntitlementDto BuildEntitlementDto(BattlePassStateDto battlePass)
+    {
+        return new PurchaseEntitlementDto
+        {
+            Type = EntitlementTypes.BattlePass,
+            Key = $"battle_pass_{battlePass.PassType}_{battlePass.SeasonId}",
+            Status = EntitlementStatuses.Active
+        };
+    }
+
+    private static VerifyGooglePurchaseResponse BuildFailureResponse(BattlePassAdminOperationResponse response)
+    {
+        return new VerifyGooglePurchaseResponse
+        {
+            Success = false,
+            PurchaseStatus = VerifyGooglePurchaseStatuses.VerifyFailed,
+            GoogleFinalizeStatus = GooglePlayFinalizeStatuses.NotApplicable,
+            ErrorCode = response.ErrorCode ?? BattlePassErrorCodes.ValidationError,
+            ErrorMessage = response.ErrorMessage ?? "Battle pass grant failed."
+        };
+    }
+
+    private static ActionResult<VerifyGooglePurchaseResponse> ToActionResult(VerifyGooglePurchaseResponse response)
+    {
+        if (response.Success)
+        {
+            return new OkObjectResult(response);
+        }
+
+        return response.ErrorCode switch
+        {
+            BattlePassErrorCodes.PlayerNotFound => new NotFoundObjectResult(response),
+            BattlePassErrorCodes.SeasonNotFound => new NotFoundObjectResult(response),
+            _ => new BadRequestObjectResult(response)
+        };
     }
 }
