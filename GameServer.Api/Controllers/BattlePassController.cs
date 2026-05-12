@@ -142,7 +142,7 @@ public sealed class BattlePassController : ControllerBase
         }
     }
     
-    [HttpPost("/dev/grant-battle-pass")]
+    [HttpPost("dev/grant-battle-pass")]
     public async Task<ActionResult<VerifyGooglePurchaseResponse>> Verify([FromBody] VerifyGooglePurchaseRequest request, CancellationToken ct)
     {
         return BadRequest("Verify endpoint works, but verification is not implemented yet.");
