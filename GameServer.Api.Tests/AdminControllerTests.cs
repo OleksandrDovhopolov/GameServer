@@ -1,8 +1,12 @@
 using System.Text.Json.Nodes;
 using GameServer.Api.Controllers;
+using GameServer.Api.Models.Domain.Inventory;
 using GameServer.Api.Models.Domain;
 using GameServer.Api.Models.Dto.Admin;
+using GameServer.Api.Models.Dto.Inventory;
+using GameServer.Api.Models.Dto.Rewards;
 using GameServer.Api.Repositories.Interfaces;
+using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,7 +23,7 @@ public sealed class AdminControllerTests
         var repository = new InMemorySaveRepository();
         repository.Seed("p1",
             "{\"availableSpins\":2,\"lastResetTimestamp\":123,\"FortuneWheel\":{\"AvailableSpins\":7,\"UpdatedAt\":1699999999000,\"LastResetTimestamp\":111,\"NextUpdateAt\":999}}");
-        var controller = CreateController(repository, now);
+        var controller = CreateController(repository, now, new StubInventoryManagementService());
 
         var actionResult = await controller.AdjustSpins("p1", 5, CancellationToken.None);
 
@@ -46,7 +50,7 @@ public sealed class AdminControllerTests
         const long now = 1_700_000_000_000;
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", "{\"FortuneWheel\":{\"AvailableSpins\":3,\"UpdatedAt\":1700000001000}}");
-        var controller = CreateController(repository, now);
+        var controller = CreateController(repository, now, new StubInventoryManagementService());
 
         var actionResult = await controller.AdjustSpins("p1", -1, CancellationToken.None);
 
@@ -62,7 +66,7 @@ public sealed class AdminControllerTests
     {
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", "{\"coins\":100}");
-        var controller = CreateController(repository, 1_700_000_000_000);
+        var controller = CreateController(repository, 1_700_000_000_000, new StubInventoryManagementService());
 
         var result = await controller.DeletePlayer("p1", CancellationToken.None);
 
@@ -74,7 +78,7 @@ public sealed class AdminControllerTests
     public async Task GetRawPlayerSave_WhenMissing_ReturnsNotFound()
     {
         var repository = new InMemorySaveRepository();
-        var controller = CreateController(repository, 1_700_000_000_000);
+        var controller = CreateController(repository, 1_700_000_000_000, new StubInventoryManagementService());
 
         var result = await controller.GetRawPlayerSave("p1", CancellationToken.None);
 
@@ -86,7 +90,7 @@ public sealed class AdminControllerTests
     {
         var repository = new InMemorySaveRepository();
         repository.Seed("p1", "{\"coins\":55}");
-        var controller = CreateController(repository, 1_700_000_000_000);
+        var controller = CreateController(repository, 1_700_000_000_000, new StubInventoryManagementService());
 
         var result = await controller.GetRawPlayerSave("p1", CancellationToken.None);
 
@@ -95,11 +99,68 @@ public sealed class AdminControllerTests
         Assert.Equal(55, node!["coins"]!.GetValue<int>());
     }
 
-    private static AdminController CreateController(InMemorySaveRepository repository, long now)
+    [Fact]
+    public async Task AddInventory_WhenSuccess_ReturnsOk()
+    {
+        var repository = new InMemorySaveRepository();
+        var service = new StubInventoryManagementService
+        {
+            AddResult = new InventoryOperationResult
+            {
+                Success = true,
+                PlayerState = new PlayerStateSnapshotDto
+                {
+                    InventoryItems = [new InventoryItemDto { ItemId = "bomb", Amount = 3 }]
+                }
+            }
+        };
+        var controller = CreateController(repository, 1_700_000_000_000, service);
+
+        var result = await controller.AddInventory(new AddInventoryItemCommand
+        {
+            PlayerId = "p1",
+            ItemId = "bomb",
+            Amount = 3,
+            Reason = "debug_add"
+        }, CancellationToken.None);
+
+        Assert.IsType<OkObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task AddInventory_WhenInvalidRequest_ReturnsBadRequest()
+    {
+        var repository = new InMemorySaveRepository();
+        var service = new StubInventoryManagementService
+        {
+            AddResult = new InventoryOperationResult
+            {
+                Success = false,
+                ErrorCode = InventoryErrorCodes.InvalidRequest
+            }
+        };
+        var controller = CreateController(repository, 1_700_000_000_000, service);
+
+        var result = await controller.AddInventory(new AddInventoryItemCommand
+        {
+            PlayerId = "",
+            ItemId = "",
+            Amount = 0,
+            Reason = ""
+        }, CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    private static AdminController CreateController(
+        InMemorySaveRepository repository,
+        long now,
+        IInventoryManagementService inventoryManagementService)
     {
         return new AdminController(
             NullLogger<AdminController>.Instance,
             repository,
+            inventoryManagementService,
             new FixedClock(now));
     }
 
@@ -167,6 +228,36 @@ public sealed class AdminControllerTests
         {
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult(_store.ContainsKey(playerId));
+        }
+    }
+
+    private sealed class StubInventoryManagementService : IInventoryManagementService
+    {
+        public InventoryOperationResult AddResult { get; set; } = new() { Success = true };
+
+        public Task<InventoryOperationResult> AddAsync(AddInventoryItemCommand command, CancellationToken ct = default)
+        {
+            return Task.FromResult(AddResult);
+        }
+
+        public Task<InventoryOperationResult> RemoveAsync(RemoveInventoryItemCommand command, CancellationToken ct = default)
+        {
+            return Task.FromResult(new InventoryOperationResult
+            {
+                Success = false,
+                ErrorCode = InventoryErrorCodes.InvalidRequest,
+                ErrorMessage = "Not configured."
+            });
+        }
+
+        public Task<InventoryOperationResult> RemoveBatchAsync(RemoveInventoryBatchCommand command, CancellationToken ct = default)
+        {
+            return Task.FromResult(new InventoryOperationResult
+            {
+                Success = false,
+                ErrorCode = InventoryErrorCodes.InvalidRequest,
+                ErrorMessage = "Not configured."
+            });
         }
     }
 }

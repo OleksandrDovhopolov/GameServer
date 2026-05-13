@@ -3,8 +3,6 @@ using System.Text.Json.Nodes;
 using GameServer.Api.Models.Domain;
 using GameServer.Api.Repositories.Interfaces;
 using GameServer.Api.Services.Interfaces;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace GameServer.Api.Services;
 
@@ -14,19 +12,28 @@ public sealed class SaveService : ISaveService
     private const string FortuneWheelPropertyName = "FortuneWheel";
     private const string AvailableSpinsPropertyName = "AvailableSpins";
     private const string UpdatedAtPropertyName = "UpdatedAt";
+    private const string AdSpinAvailablePropertyName = "AdSpinAvailable";
+    private const string ResourcesPropertyName = "Resources";
+    private const string InventoryPropertyName = "Inventory";
+    private const string InventoryItemsPropertyName = "InventoryItems";
+    private const string ServerRewardsPropertyName = "ServerRewards";
 
     private readonly ISaveRepository _saveRepository;
+    private readonly IPlayerAggregateRepository _playerAggregateRepository;
+    private readonly IGameSaveAssembler _gameSaveAssembler;
     private readonly ISystemClock _clock;
     private readonly ILogger<SaveService> _logger;
-
-    public SaveService(ISaveRepository saveRepository)
-        : this(saveRepository, new SystemClock(), NullLogger<SaveService>.Instance)
-    {
-    }
-
-    public SaveService(ISaveRepository saveRepository, ISystemClock clock, ILogger<SaveService> logger)
+    
+    public SaveService(
+        ISaveRepository saveRepository,
+        IPlayerAggregateRepository playerAggregateRepository,
+        IGameSaveAssembler gameSaveAssembler,
+        ISystemClock clock,
+        ILogger<SaveService> logger)
     {
         _saveRepository = saveRepository;
+        _playerAggregateRepository = playerAggregateRepository;
+        _gameSaveAssembler = gameSaveAssembler;
         _clock = clock;
         _logger = logger;
     }
@@ -37,14 +44,26 @@ public sealed class SaveService : ISaveService
         ValidateData(data);
 
         var guardedData = await ApplyWheelSaveGuardsAsync(playerId, data, cancellationToken);
-        await _saveRepository.SaveAsync(playerId, guardedData, cancellationToken);
+        if (!TryParseRootObject(guardedData, out var root))
+        {
+            throw new ArgumentException("Data must be a JSON object.", nameof(data));
+        }
+
+        SanitizeBlobRoot(root);
+        var aggregate = await _playerAggregateRepository.LoadAsync(playerId, cancellationToken);
+        ReplaceRootDocument(aggregate.RootDocument, root);
+        await _playerAggregateRepository.SaveAsync(aggregate, cancellationToken);
     }
 
     public async Task<SaveRecord> LoadAsync(string playerId, CancellationToken cancellationToken)
     {
         ValidatePlayerId(playerId);
-        var save = await _saveRepository.LoadAsync(playerId, cancellationToken);
-        return save ?? throw new KeyNotFoundException($"Save for player '{playerId}' was not found.");
+        var aggregate = await _playerAggregateRepository.LoadAsync(playerId, cancellationToken);
+        return new SaveRecord
+        {
+            Data = _gameSaveAssembler.BuildSaveJson(aggregate),
+            LastModified = aggregate.LastModified
+        };
     }
 
     public async Task DeleteAsync(string playerId, CancellationToken cancellationToken)
@@ -56,7 +75,7 @@ public sealed class SaveService : ISaveService
             throw new KeyNotFoundException($"Save for player '{playerId}' was not found.");
         }
 
-        await _saveRepository.DeleteAsync(playerId, cancellationToken);
+        await _playerAggregateRepository.DeleteAsync(playerId, cancellationToken);
     }
 
     public async Task<long> GetLastModifiedTimestampAsync(string playerId, CancellationToken cancellationToken)
@@ -199,6 +218,16 @@ public sealed class SaveService : ISaveService
             actions.Add("IgnoredInvalidIncomingUpdatedAt");
         }
 
+        var adSpinAvailable = existingState.AdSpinAvailable ?? false;
+        if (incomingState.AdSpinAvailable is not null && incomingState.AdSpinAvailable != adSpinAvailable)
+        {
+            actions.Add("IgnoredClientAdSpinAvailable");
+        }
+        else if (incomingState.AdSpinAvailable is null && existingState.AdSpinAvailable is not null)
+        {
+            actions.Add("MergedAdSpinAvailableFromExisting");
+        }
+
         if (incomingFortuneWheel.ContainsKey("NextUpdateAt"))
         {
             incomingFortuneWheel.Remove("NextUpdateAt");
@@ -220,6 +249,7 @@ public sealed class SaveService : ISaveService
         }
 
         incomingFortuneWheel[UpdatedAtPropertyName] = updatedAt.Value;
+        incomingFortuneWheel[AdSpinAvailablePropertyName] = adSpinAvailable;
     }
 
     private static WheelSaveReadResult ReadWheelState(JsonObject? wheelNode, long now)
@@ -231,6 +261,7 @@ public sealed class SaveService : ISaveService
 
         var availableSpins = TryGetInt(wheelNode, AvailableSpinsPropertyName);
         var rawUpdatedAt = TryGetLong(wheelNode, UpdatedAtPropertyName);
+        var adSpinAvailable = TryGetBool(wheelNode, AdSpinAvailablePropertyName);
         long? updatedAt = null;
         var updatedAtWasNormalized = false;
         var updatedAtWasInvalid = false;
@@ -252,6 +283,7 @@ public sealed class SaveService : ISaveService
             AvailableSpins = availableSpins,
             RawUpdatedAt = rawUpdatedAt,
             UpdatedAt = updatedAt,
+            AdSpinAvailable = adSpinAvailable,
             UpdatedAtWasNormalized = updatedAtWasNormalized,
             UpdatedAtWasInvalid = updatedAtWasInvalid
         };
@@ -313,6 +345,23 @@ public sealed class SaveService : ISaveService
         return false;
     }
 
+    private static void SanitizeBlobRoot(JsonObject root)
+    {
+        root.Remove(ResourcesPropertyName);
+        root.Remove(ServerRewardsPropertyName);
+        root.Remove(InventoryItemsPropertyName);
+        root.Remove(InventoryPropertyName);
+    }
+
+    private static void ReplaceRootDocument(JsonObject destination, JsonObject source)
+    {
+        destination.Clear();
+        foreach (var (key, value) in source)
+        {
+            destination[key] = value?.DeepClone();
+        }
+    }
+
     private static JsonObject? GetFortuneWheelObject(JsonObject? root)
     {
         if (root is null)
@@ -369,11 +418,47 @@ public sealed class SaveService : ISaveService
         return null;
     }
 
+    private static bool? TryGetBool(JsonObject source, string propertyName)
+    {
+        if (!source.TryGetPropertyValue(propertyName, out var propertyValue) || propertyValue is null)
+        {
+            return null;
+        }
+
+        if (propertyValue is JsonValue boolValue && boolValue.TryGetValue(out bool parsedBool))
+        {
+            return parsedBool;
+        }
+
+        if (propertyValue is JsonValue stringValue &&
+            stringValue.TryGetValue(out string? raw))
+        {
+            if (bool.TryParse(raw, out var stringParsedBool))
+            {
+                return stringParsedBool;
+            }
+
+            if (int.TryParse(raw, out var parsedInt))
+            {
+                return parsedInt != 0;
+            }
+        }
+
+        if (propertyValue is JsonValue numberValue &&
+            numberValue.TryGetValue(out int intValue))
+        {
+            return intValue != 0;
+        }
+
+        return null;
+    }
+
     private readonly struct WheelSaveReadResult
     {
         public int? AvailableSpins { get; init; }
         public long? RawUpdatedAt { get; init; }
         public long? UpdatedAt { get; init; }
+        public bool? AdSpinAvailable { get; init; }
         public bool UpdatedAtWasNormalized { get; init; }
         public bool UpdatedAtWasInvalid { get; init; }
     }

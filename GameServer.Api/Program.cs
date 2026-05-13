@@ -42,6 +42,13 @@ builder.Services.AddScoped<IPackSelectionStrategy, PackSelectionStrategy>();
 builder.Services.AddScoped<IPackService, PackService>();
 builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
 builder.Services.Configure<PostgresOptions>(builder.Configuration.GetSection(PostgresOptions.SectionName));
+builder.Services.Configure<AdminToolsOptions>(builder.Configuration.GetSection(AdminToolsOptions.SectionName));
+builder.Services.Configure<GooglePlayBillingOptions>(builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName));
+
+var googlePlayBillingOptions = builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName).Get<GooglePlayBillingOptions>() ?? new GooglePlayBillingOptions();
+LogGooglePlayBillingConfigurationState(builder.Environment, googlePlayBillingOptions);
+ValidateGooglePlayBillingConfiguration(builder.Environment, googlePlayBillingOptions);
+
 builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 {
     var redisOptions = serviceProvider.GetRequiredService<IOptions<RedisOptions>>().Value;
@@ -52,10 +59,46 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 
     return ConnectionMultiplexer.Connect(redisOptions.ConnectionString);
 });
-builder.Services.AddScoped<RedisSaveRepository>();
-builder.Services.AddScoped<PostgreSqlSaveRepository>();
-builder.Services.AddScoped<ISaveRepository, HybridSaveRepository>();
+builder.Services.AddScoped<ISaveRepository, RedisSaveRepository>();
+builder.Services.AddScoped<IPlayerAggregateRepository, RedisPlayerAggregateRepository>();
+builder.Services.AddScoped<IPlayerResourcesRepository, RedisPlayerResourcesRepository>();
+builder.Services.AddScoped<IPlayerInventoryRepository, RedisPlayerInventoryRepository>();
+builder.Services.AddScoped<IGameSaveAssembler, GameSaveAssembler>();
 builder.Services.AddScoped<ISaveService, SaveService>();
+builder.Services.AddScoped<IResourceAdjustmentService, ResourceAdjustmentService>();
+builder.Services.AddScoped<IInventoryManagementService, InventoryManagementService>();
+builder.Services.AddSingleton<IRewardDefinitionRepository, RewardDefinitionRepository>();
+builder.Services.AddScoped<IRewardPartApplier, RewardPartApplier>();
+builder.Services.AddScoped<IRewardHandler, ResourceRewardHandler>();
+builder.Services.AddScoped<IRewardHandler, InventoryRewardHandler>();
+builder.Services.AddScoped<IRewardHandler, FreeSpinRewardHandler>();
+builder.Services.AddScoped<IRewardApplicationService, RewardApplicationService>();
+builder.Services.AddScoped<IPlayerEconomyRepository, RedisPlayerEconomyRepository>();
+builder.Services.AddScoped<IRewardIntentRepository, RedisRewardIntentRepository>();
+builder.Services.AddScoped<IRewardIntentService, RewardIntentService>();
+builder.Services.AddScoped<IDistributedLockService, RedisDistributedLockService>();
+builder.Services.AddScoped<IRedisAdminClient, RedisAdminClient>();
+builder.Services.AddScoped<IAdminMaintenanceService, AdminMaintenanceService>();
+builder.Services.AddScoped<IBattlePassSeasonRepository, RedisBattlePassSeasonRepository>();
+builder.Services.AddScoped<IBattlePassStateRepository, RedisBattlePassStateRepository>();
+builder.Services.AddScoped<IEntitlementRepository, RedisEntitlementRepository>();
+builder.Services.AddScoped<IPurchaseRepository, RedisPurchaseRepository>();
+builder.Services.AddScoped<IProductCatalogRepository, RedisProductCatalogRepository>();
+builder.Services.AddScoped<IEntitlementService, EntitlementService>();
+builder.Services.AddScoped<ILiveOpsScheduleItemProvider, BattlePassLiveOpsProvider>();
+builder.Services.AddScoped<ILiveOpsScheduleService, FileLiveOpsScheduleService>();
+builder.Services.AddScoped<IBattlePassService, BattlePassService>();
+builder.Services.AddScoped<IIapService, IapService>();
+builder.Services.AddScoped<IBattlePassAdminService, BattlePassAdminService>();
+if (googlePlayBillingOptions.Enabled)
+{
+    builder.Services.AddSingleton<IGooglePlayProductPurchaseClient, GooglePlayPublisherApiClient>();
+    builder.Services.AddScoped<IGooglePlayPurchaseVerifier, GooglePlayPurchaseVerifier>();
+}
+else
+{
+    builder.Services.AddScoped<IGooglePlayPurchaseVerifier, StubGooglePlayPurchaseVerifier>();
+}
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 builder.Services.AddScoped<AdminBasicAuthFilter>();
 builder.Services.AddSingleton<IRandomGenerator, RandomGenerator>();
@@ -65,42 +108,19 @@ builder.Services.AddScoped<IWheelService, WheelService>();
 
 var app = builder.Build();
 
-// PostgreSQL schema initialization is temporarily disabled (Redis-only persistence).
-/*
-var stoppingToken = app.Lifetime.ApplicationStopping;
-await using (var scope = app.Services.CreateAsyncScope())
-{
-    var startupLogger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup.Postgres");
-    var postgresOptions = scope.ServiceProvider.GetRequiredService<IOptions<PostgresOptions>>().Value;
-    if (string.IsNullOrWhiteSpace(postgresOptions.ConnectionString))
-    {
-        throw new InvalidOperationException("Postgres:ConnectionString is not configured.");
-    }
-
-    startupLogger.LogInformation("Starting PostgreSQL schema initialization.");
-    using var conn = new NpgsqlConnection(postgresOptions.ConnectionString);
-    await conn.OpenAsync(stoppingToken);
-    startupLogger.LogInformation("PostgreSQL connection opened for schema initialization.");
-
-    await conn.ExecuteAsync(new CommandDefinition(
-        @"CREATE TABLE IF NOT EXISTS player_saves (
-            player_id VARCHAR(128) PRIMARY KEY,
-            save_data TEXT NOT NULL,
-            last_modified_at BIGINT NOT NULL,
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );",
-        cancellationToken: stoppingToken));
-
-    await conn.ExecuteAsync(new CommandDefinition(
-        @"CREATE INDEX IF NOT EXISTS idx_player_saves_last_modified
-          ON player_saves(last_modified_at);",
-        cancellationToken: stoppingToken));
-    startupLogger.LogInformation("PostgreSQL schema initialization completed successfully.");
-}
-*/
+app.Logger.LogInformation(
+    "Google Play billing startup state. Enabled: {Enabled}, PackageNameSet: {PackageNameSet}, ServiceAccountJsonSet: {ServiceAccountJsonSet}, ServiceAccountKeyFileSet: {ServiceAccountKeyFileSet}, ApplicationName: {ApplicationName}, HttpTimeoutSeconds: {HttpTimeoutSeconds}, VerifierMode: {VerifierMode}",
+    googlePlayBillingOptions.Enabled,
+    !string.IsNullOrWhiteSpace(googlePlayBillingOptions.PackageName),
+    !string.IsNullOrWhiteSpace(googlePlayBillingOptions.ServiceAccountJson),
+    !string.IsNullOrWhiteSpace(googlePlayBillingOptions.ServiceAccountKeyFile),
+    googlePlayBillingOptions.ApplicationName,
+    googlePlayBillingOptions.HttpTimeoutSeconds,
+    googlePlayBillingOptions.Enabled ? nameof(GooglePlayPurchaseVerifier) : nameof(StubGooglePlayPurchaseVerifier));
 
 // Force reward catalog initialization at startup so invalid configuration fails fast.
 app.Services.GetRequiredService<IWheelRewardCatalog>();
+app.Services.GetRequiredService<IRewardDefinitionRepository>();
 
 if (!app.Environment.IsDevelopment())
 {
@@ -117,3 +137,45 @@ app.MapControllers();
 app.MapGet("/ping", () => "pong");
 
 app.Run();
+
+static void ValidateGooglePlayBillingConfiguration(IWebHostEnvironment environment, GooglePlayBillingOptions options)
+{
+    if (!options.Enabled)
+    {
+        if (!environment.IsDevelopment())
+        {
+            throw new InvalidOperationException("GooglePlayBilling must be enabled outside Development.");
+        }
+
+        return;
+    }
+
+    if (string.IsNullOrWhiteSpace(options.PackageName))
+    {
+        throw new InvalidOperationException("GooglePlayBilling:PackageName is not configured.");
+    }
+
+    var hasServiceAccountJson = !string.IsNullOrWhiteSpace(options.ServiceAccountJson);
+    var hasServiceAccountKeyFile = !string.IsNullOrWhiteSpace(options.ServiceAccountKeyFile);
+
+    if (!hasServiceAccountJson && !hasServiceAccountKeyFile)
+    {
+        throw new InvalidOperationException("GooglePlayBilling requires either ServiceAccountJson or ServiceAccountKeyFile.");
+    }
+
+    if (hasServiceAccountKeyFile && !File.Exists(options.ServiceAccountKeyFile))
+    {
+        throw new InvalidOperationException($"GooglePlayBilling:ServiceAccountKeyFile was not found at '{options.ServiceAccountKeyFile}'.");
+    }
+}
+
+static void LogGooglePlayBillingConfigurationState(IWebHostEnvironment environment, GooglePlayBillingOptions options)
+{
+    Console.WriteLine(
+        "GooglePlayBilling config state: Environment={0}; Enabled={1}; PackageNameSet={2}; ServiceAccountJsonLength={3}; ServiceAccountKeyFileLength={4}",
+        environment.EnvironmentName,
+        options.Enabled,
+        !string.IsNullOrWhiteSpace(options.PackageName),
+        options.ServiceAccountJson?.Length ?? 0,
+        options.ServiceAccountKeyFile?.Length ?? 0);
+}

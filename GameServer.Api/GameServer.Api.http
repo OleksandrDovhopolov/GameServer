@@ -18,3 +18,29 @@ Content-Type: application/json
 }
 
 ###
+
+POST {{GameServer.Api_HostAddress}}/api/v1/rewards/grant
+Content-Type: application/json
+
+{
+  "playerId": "test-player-1",
+  "rewardSource": "wheel",
+  "rewardId": "Gold"
+}
+
+###
+
+POST {{GameServer.Api_HostAddress}}/api/v1/battle-pass/xp/add
+Content-Type: application/json
+
+{
+  "playerId": "test-player-1",
+  "amount": 20
+}
+
+###
+
+GET {{GameServer.Api_HostAddress}}/api/v1/battle-pass/current?playerId=test-player-1
+Accept: application/json
+
+###

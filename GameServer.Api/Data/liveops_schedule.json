@@ -1,0 +1,37 @@
+[
+  {
+    "Id": "Winter_Collection",
+    "EventType": "CardCollection",
+    "StartTimeUtc": "2026-04-16T08:39:03.4664352+00:00",
+    "EndTimeUtc": "2026-04-27T22:25:43.4664352+00:00",
+    "Priority": 10,
+    "StreamId": "card_collection_seasons",
+    "CustomParams": {
+      "eventId": "Winter_Collection",
+      "collectionName": "Winter Collection",
+      "eventConfigAddress": "event_winter_collection_config"
+    }
+  },
+  {
+    "Id": "Spring_Collection",
+    "EventType": "CardCollection",
+    "StartTimeUtc": "2026-04-27T22:25:43.4664352+00:00",
+    "EndTimeUtc": "2026-05-27T22:34:03.4664352+00:00",
+    "Priority": 10,
+    "StreamId": "card_collection_seasons",
+    "CustomParams": {
+      "eventId": "Spring_Collection",
+      "collectionName": "Spring Collection",
+      "eventConfigAddress": "event_spring_collection_config"
+    }
+  },
+  {
+    "Id": "Test_Battle_Pass",
+    "EventType": "BattlePass",
+    "StartTimeUtc": "2026-04-20T22:25:43.4664352+00:00",
+    "EndTimeUtc": "2026-06-05T22:34:03.4664352+00:00",
+    "Priority": 1,
+    "StreamId": "battle_pass",
+    "CustomParams": {}
+  }
+]

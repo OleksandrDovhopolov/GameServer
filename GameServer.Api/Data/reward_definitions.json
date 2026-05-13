@@ -1,0 +1,310 @@
+{
+    "rewards":  [
+                    {
+                        "rewardId":  "Energy",
+                        "source":  "wheel",
+                        "parts":  [
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Energy",
+                                          "amount":  100,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Gold",
+                        "source":  "wheel",
+                        "parts":  [
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gold",
+                                          "amount":  100,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Gems",
+                        "source":  "wheel",
+                        "parts":  [
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gems",
+                                          "amount":  100,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Spring_Collection",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gold",
+                                          "amount":  1000,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Energy",
+                                          "amount":  100,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gems",
+                                          "amount":  10,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Winter_Collection",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gold",
+                                          "amount":  1000,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Energy",
+                                          "amount":  100,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gems",
+                                          "amount":  10,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "SmallPack",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gold",
+                                          "amount":  1000,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gems",
+                                          "amount":  10,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Emerald_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "MiddlePack",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gold",
+                                          "amount":  500,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Energy",
+                                          "amount":  75,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Emerald_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      },
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Lazurite_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "BigPack",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gold",
+                                          "amount":  1000,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  1,
+                                          "targetId":  "Gems",
+                                          "amount":  10,
+                                          "category":  "regular"
+                                      },
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Emerald_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      },
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Lazurite_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      },
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Ruby_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Lazurite_Pack",
+                        "source":  "wheel",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Lazurite_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Bronze_Pack",
+                        "source":  "wheel",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Bronze_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Emerald_Pack",
+                        "source":  "wheel",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Emerald_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Sapphire_Pack",
+                        "source":  "wheel",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Sapphire_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "Ruby_Pack",
+                        "source":  "wheel",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "Ruby_Pack",
+                                          "amount":  1,
+                                          "category":  "card_pack"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "fortune_wheel_ad_spin",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  7,
+                                          "targetId":  "FortuneWheel",
+                                          "amount":  1,
+                                          "category":  "ad_spin"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "item_red_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "item_red_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "item_blue_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "item_blue_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "item_green_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "item_green_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "item_purple_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "item_purple_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    },
+                    {
+                        "rewardId":  "item_gold_lure",
+                        "source":  "grant",
+                        "parts":  [
+                                      {
+                                          "kind":  2,
+                                          "targetId":  "item_gold_lure",
+                                          "amount":  1,
+                                          "category":  "regular"
+                                      }
+                                  ]
+                    }
+                ]
+}

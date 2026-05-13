@@ -7,45 +7,20 @@
       - "5000:8080"
     depends_on:
       - redis
-      - postgres
-      - rabbitmq
     environment:
       - Redis__ConnectionString=redis:6379,abortConnect=false
-      - Postgres__ConnectionString=Host=postgres;Port=5432;Database=game_server;Username=postgres;Password=postgres;Include Error Detail=true
       - ADMIN_USER=admin
       - ADMIN_PASS=admin
+      - GooglePlayBilling__Enabled=${GOOGLE_PLAY_BILLING__ENABLED:-false}
+      - GooglePlayBilling__PackageName=${GOOGLE_PLAY_BILLING__PACKAGE_NAME:-}
+      - GooglePlayBilling__ServiceAccountJson=${GOOGLE_PLAY_BILLING__SERVICE_ACCOUNT_JSON:-}
+      - GooglePlayBilling__ServiceAccountKeyFile=${GOOGLE_PLAY_BILLING__SERVICE_ACCOUNT_KEY_FILE:-/run/secrets/google-play-service-account.json}
+      - GooglePlayBilling__ApplicationName=GameServer.Api
+    # Optional fallback when you want to load credentials from a mounted file instead of env JSON.
+    # volumes:
+    #   - ./secrets/google-play-service-account.json:/run/secrets/google-play-service-account.json:ro
 
   redis:
     image: redis:alpine
     ports:
       - "6379:6379"
-
-  postgres:
-    image: postgres:latest
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=game_server
-
-  rabbitmq:
-    image: rabbitmq:3-management
-    ports:
-      - "5672:5672"
-      - "15672:15672"
-
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    ports:
-      - "5050:80"
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@example.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
-    depends_on:
-      - postgres
-    volumes:
-      - pgadmin:/var/lib/pgadmin
-
-volumes:
-  pgadmin:

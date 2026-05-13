@@ -56,17 +56,19 @@ public sealed class WheelController : ControllerBase
                     cancellationToken.IsCancellationRequested);
                 var result = await _wheelService.GetStateAsync(playerId, cancellationToken);
                 _logger.LogInformation(
-                    "Wheel data request succeeded. TraceId: {TraceId}, AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, ElapsedMs: {ElapsedMs}",
+                    "Wheel data request succeeded. TraceId: {TraceId}, AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, AdSpinAvailable: {AdSpinAvailable}, ElapsedMs: {ElapsedMs}",
                     traceId,
                     result.AvailableSpins,
                     result.UpdatedAt,
                     result.NextUpdateAt,
+                    result.AdSpinAvailable,
                     stopwatch.ElapsedMilliseconds);
                 return Ok(new WheelDataResponse
                 {
                     AvailableSpins = result.AvailableSpins,
                     UpdatedAt = result.UpdatedAt,
-                    NextUpdateAt = result.NextUpdateAt
+                    NextUpdateAt = result.NextUpdateAt,
+                    AdSpinAvailable = result.AdSpinAvailable
                 });
             }
             catch (ArgumentException ex)
@@ -102,19 +104,22 @@ public sealed class WheelController : ControllerBase
                     cancellationToken.IsCancellationRequested);
                 var result = await _wheelService.SpinAsync(request.PlayerId, cancellationToken);
                 _logger.LogInformation(
-                    "Wheel spin request succeeded. TraceId: {TraceId}, RewardId: {RewardId}, AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, ElapsedMs: {ElapsedMs}",
+                    "Wheel spin request succeeded. TraceId: {TraceId}, RewardId: {RewardId}, AvailableSpins: {AvailableSpins}, UpdatedAt: {UpdatedAt}, NextUpdateAt: {NextUpdateAt}, AdSpinAvailable: {AdSpinAvailable}, ElapsedMs: {ElapsedMs}",
                     traceId,
                     result.RewardId,
                     result.AvailableSpins,
                     result.UpdatedAt,
                     result.NextUpdateAt,
+                    result.AdSpinAvailable,
                     stopwatch.ElapsedMilliseconds);
                 return Ok(new WheelSpinResponse
                 {
                     RewardId = result.RewardId,
                     AvailableSpins = result.AvailableSpins,
                     UpdatedAt = result.UpdatedAt,
-                    NextUpdateAt = result.NextUpdateAt
+                    NextUpdateAt = result.NextUpdateAt,
+                    AdSpinAvailable = result.AdSpinAvailable,
+                    RewardGrant = result.RewardGrant
                 });
             }
             catch (ArgumentException ex)

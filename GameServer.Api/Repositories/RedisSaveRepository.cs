@@ -18,7 +18,6 @@ public sealed class RedisSaveRepository : ISaveRepository
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var ttl = TimeSpan.FromHours(24);
         var lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var transaction = _database.CreateTransaction();
 
@@ -30,10 +29,6 @@ public sealed class RedisSaveRepository : ISaveRepository
         {
             throw new InvalidOperationException("Redis transaction failed while saving player data.");
         }
-
-        // Enforce cache eviction for active/inactive saves.
-        await _database.KeyExpireAsync(GetSaveKey(playerId), ttl).WaitAsync(cancellationToken);
-        await _database.KeyExpireAsync(GetMetaKey(playerId), ttl).WaitAsync(cancellationToken);
     }
 
     public async Task<SaveRecord?> LoadAsync(string playerId, CancellationToken cancellationToken)
@@ -79,6 +74,10 @@ public sealed class RedisSaveRepository : ISaveRepository
         var transaction = _database.CreateTransaction();
         _ = transaction.KeyDeleteAsync(GetSaveKey(playerId));
         _ = transaction.KeyDeleteAsync(GetMetaKey(playerId));
+        _ = transaction.KeyDeleteAsync(GetResourcesKey(playerId));
+        _ = transaction.KeyDeleteAsync(GetResourcesVersionKey(playerId));
+        _ = transaction.KeyDeleteAsync(GetInventoryKey(playerId));
+        _ = transaction.KeyDeleteAsync(GetInventoryVersionKey(playerId));
         _ = await transaction.ExecuteAsync().WaitAsync(cancellationToken);
     }
 
@@ -88,8 +87,12 @@ public sealed class RedisSaveRepository : ISaveRepository
         return _database.KeyExistsAsync(GetSaveKey(playerId)).WaitAsync(cancellationToken);
     }
 
-    private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}";
+    private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}:{playerId}";
     private static RedisKey GetMetaKey(string playerId) => $"save:{playerId}:meta";
+    private static RedisKey GetResourcesKey(string playerId) => $"save:{playerId}:resources";
+    private static RedisKey GetResourcesVersionKey(string playerId) => $"save:{playerId}:resources:version";
+    private static RedisKey GetInventoryKey(string playerId) => $"save:{playerId}:inventory";
+    private static RedisKey GetInventoryVersionKey(string playerId) => $"save:{playerId}:inventory:version";
 
     private static long TryParseLastModified(RedisValue rawValue)
     {
