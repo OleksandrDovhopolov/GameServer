@@ -4,5 +4,5 @@ namespace GameServer.Api.Services.Interfaces;
 
 public interface ILiveOpsScheduleService
 {
-    Task<IReadOnlyList<PublicLiveOpsScheduleItemDto>> GetScheduleAsync(CancellationToken ct = default);
+    Task<PublicLiveOpsScheduleResponseDto> GetScheduleAsync(CancellationToken ct = default);
 }

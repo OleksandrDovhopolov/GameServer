@@ -6,6 +6,8 @@ namespace GameServer.Api.Services;
 
 public sealed class BattlePassLiveOpsProvider : ILiveOpsScheduleItemProvider
 {
+    private const int BattlePassPriority = 1;
+
     private readonly IBattlePassSeasonRepository _seasonRepository;
     private readonly ISystemClock _clock;
 
@@ -27,14 +29,16 @@ public sealed class BattlePassLiveOpsProvider : ILiveOpsScheduleItemProvider
             .OrderBy(x => x.StartAtUtcMs)
             .Select(x => new LiveOpsScheduleItem
             {
-                Id = $"battle_pass_{x.Id}",
+                Id = x.Id,
                 EventType = "BattlePass",
                 StreamId = "battle_pass",
                 StartTimeUtcMs = x.StartAtUtcMs,
                 EndTimeUtcMs = x.EndAtUtcMs,
+                Priority = BattlePassPriority,
                 CustomParams = new Dictionary<string, string>(StringComparer.Ordinal)
                 {
                     ["seasonId"] = x.Id,
+                    ["title"] = x.Title,
                     ["configVersion"] = x.ConfigVersion
                 }
             })

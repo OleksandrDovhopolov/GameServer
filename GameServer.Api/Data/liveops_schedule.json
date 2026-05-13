@@ -24,14 +24,5 @@
       "collectionName": "Spring Collection",
       "eventConfigAddress": "event_spring_collection_config"
     }
-  },
-  {
-    "Id": "Test_Battle_Pass",
-    "EventType": "BattlePass",
-    "StartTimeUtc": "2026-04-20T22:25:43.4664352+00:00",
-    "EndTimeUtc": "2026-06-05T22:34:03.4664352+00:00",
-    "Priority": 1,
-    "StreamId": "battle_pass",
-    "CustomParams": {}
   }
 ]

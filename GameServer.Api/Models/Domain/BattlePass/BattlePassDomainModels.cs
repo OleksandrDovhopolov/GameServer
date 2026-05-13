@@ -182,5 +182,6 @@ public sealed class LiveOpsScheduleItem
     public string StreamId { get; init; } = string.Empty;
     public long StartTimeUtcMs { get; init; }
     public long EndTimeUtcMs { get; init; }
+    public int Priority { get; init; }
     public Dictionary<string, string> CustomParams { get; init; } = new(StringComparer.Ordinal);
 }

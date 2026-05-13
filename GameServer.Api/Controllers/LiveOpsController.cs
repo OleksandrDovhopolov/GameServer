@@ -18,7 +18,7 @@ public sealed class LiveOpsController : ControllerBase
     }
 
     [HttpGet("schedule")]
-    public async Task<ActionResult<IReadOnlyList<PublicLiveOpsScheduleItemDto>>> GetSchedule(CancellationToken ct)
+    public async Task<ActionResult<PublicLiveOpsScheduleResponseDto>> GetSchedule(CancellationToken ct)
     {
         try
         {

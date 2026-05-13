@@ -2,7 +2,7 @@ using System.Text.Json;
 using GameServer.Api.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace GameServer.Api.Tests;
@@ -10,8 +10,9 @@ namespace GameServer.Api.Tests;
 public sealed class LiveOpsScheduleServiceTests
 {
     [Fact]
-    public async Task GetScheduleAsync_ReadsItemsInFileOrder()
+    public async Task GetScheduleAsync_ReadsFileItemsInFileOrder_AndAppendsGeneratedBattlePassItems()
     {
+        const long now = 1_777_777_777_000;
         using var data = TestDataEnvironment.Create(
             """
             [
@@ -27,41 +28,81 @@ public sealed class LiveOpsScheduleServiceTests
                 }
               },
               {
-                "Id": "second",
+                "Id": "file_bp",
                 "EventType": "BattlePass",
                 "StartTimeUtc": "2026-04-20T22:25:43.4664352+00:00",
                 "EndTimeUtc": "2026-05-01T22:34:03.4664352+00:00",
                 "Priority": 1,
                 "StreamId": "battle_pass",
                 "CustomParams": {}
+              },
+              {
+                "Id": "second",
+                "EventType": "CardCollection",
+                "StartTimeUtc": "2026-05-01T00:00:00+00:00",
+                "EndTimeUtc": "2026-05-10T00:00:00+00:00",
+                "Priority": 7,
+                "StreamId": "cards",
+                "CustomParams": {
+                  "eventId": "second"
+                }
               }
             ]
             """);
-        var service = new FileLiveOpsScheduleService(data.Environment, NullLogger<FileLiveOpsScheduleService>.Instance);
+        var seasonRepository = new InMemoryBattlePassSeasonRepository();
+        var season = BattlePassTestFactory.CreateSeason("Test_Battle_Pass", now - 10_000, now + 10_000);
+        await seasonRepository.SaveAsync(season, CancellationToken.None);
 
-        var items = await service.GetScheduleAsync(CancellationToken.None);
+        var logger = new ListLogger<FileLiveOpsScheduleService>();
+        var service = new FileLiveOpsScheduleService(
+            data.Environment,
+            logger,
+            new BattlePassLiveOpsProvider(seasonRepository, new FixedClock(now)),
+            new FixedClock(now));
 
+        var response = await service.GetScheduleAsync(CancellationToken.None);
+
+        Assert.Equal(UnixTimeHelper.ToUtcIsoString(now), response.ServerTimeUtc);
         Assert.Collection(
-            items,
+            response.Items,
             first =>
             {
                 Assert.Equal("first", first.Id);
+                Assert.Equal("CardCollection", first.EventType);
                 Assert.Equal(10, first.Priority);
-                Assert.Single(first.CustomParams);
             },
             second =>
             {
                 Assert.Equal("second", second.Id);
-                Assert.Equal(1, second.Priority);
-                Assert.Empty(second.CustomParams);
+                Assert.Equal("CardCollection", second.EventType);
+                Assert.Equal(7, second.Priority);
+            },
+            battlePass =>
+            {
+                Assert.Equal("Test_Battle_Pass", battlePass.Id);
+                Assert.Equal("BattlePass", battlePass.EventType);
+                Assert.Equal("battle_pass", battlePass.StreamId);
+                Assert.Equal(1, battlePass.Priority);
+                Assert.Equal("Test_Battle_Pass", battlePass.CustomParams["seasonId"]);
+                Assert.Equal("Test_Battle_Pass", battlePass.CustomParams["title"]);
+                Assert.Equal("v1", battlePass.CustomParams["configVersion"]);
             });
+
+        Assert.Contains(
+            logger.Entries,
+            entry => entry.LogLevel == LogLevel.Warning &&
+                     entry.Message.Contains("Ignoring file-defined BattlePass liveops item 'file_bp'", StringComparison.Ordinal));
     }
 
     [Fact]
     public async Task GetScheduleAsync_WhenFileMissing_ThrowsFileNotFoundException()
     {
         using var data = TestDataEnvironment.CreateWithoutSchedule();
-        var service = new FileLiveOpsScheduleService(data.Environment, NullLogger<FileLiveOpsScheduleService>.Instance);
+        var service = new FileLiveOpsScheduleService(
+            data.Environment,
+            new ListLogger<FileLiveOpsScheduleService>(),
+            new StaticLiveOpsScheduleItemProvider(),
+            new FixedClock(1));
 
         await Assert.ThrowsAsync<FileNotFoundException>(() => service.GetScheduleAsync(CancellationToken.None));
     }
@@ -70,7 +111,11 @@ public sealed class LiveOpsScheduleServiceTests
     public async Task GetScheduleAsync_WhenJsonInvalid_ThrowsJsonException()
     {
         using var data = TestDataEnvironment.Create("{");
-        var service = new FileLiveOpsScheduleService(data.Environment, NullLogger<FileLiveOpsScheduleService>.Instance);
+        var service = new FileLiveOpsScheduleService(
+            data.Environment,
+            new ListLogger<FileLiveOpsScheduleService>(),
+            new StaticLiveOpsScheduleItemProvider(),
+            new FixedClock(1));
 
         await Assert.ThrowsAsync<JsonException>(() => service.GetScheduleAsync(CancellationToken.None));
     }
@@ -91,7 +136,11 @@ public sealed class LiveOpsScheduleServiceTests
               }
             ]
             """);
-        var service = new FileLiveOpsScheduleService(data.Environment, NullLogger<FileLiveOpsScheduleService>.Instance);
+        var service = new FileLiveOpsScheduleService(
+            data.Environment,
+            new ListLogger<FileLiveOpsScheduleService>(),
+            new StaticLiveOpsScheduleItemProvider(),
+            new FixedClock(1));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetScheduleAsync(CancellationToken.None));
     }
@@ -150,5 +199,34 @@ public sealed class LiveOpsScheduleServiceTests
         public string EnvironmentName { get; set; }
         public string ContentRootPath { get; set; }
         public IFileProvider ContentRootFileProvider { get; set; }
+    }
+
+    private sealed class ListLogger<T> : ILogger<T>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullDisposable.Instance;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            Entries.Add(new LogEntry(logLevel, formatter(state, exception)));
+        }
+
+        public sealed record LogEntry(LogLevel LogLevel, string Message);
+
+        private sealed class NullDisposable : IDisposable
+        {
+            public static readonly NullDisposable Instance = new();
+            public void Dispose()
+            {
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GameServer.Api.Models.Domain.BattlePass;
 using GameServer.Api.Models.Dto.LiveOps;
 using GameServer.Api.Services.Interfaces;
 
@@ -16,14 +17,52 @@ public sealed class FileLiveOpsScheduleService : ILiveOpsScheduleService
 
     private readonly IWebHostEnvironment _environment;
     private readonly ILogger<FileLiveOpsScheduleService> _logger;
+    private readonly ILiveOpsScheduleItemProvider _liveOpsScheduleItemProvider;
+    private readonly ISystemClock _clock;
 
-    public FileLiveOpsScheduleService(IWebHostEnvironment environment, ILogger<FileLiveOpsScheduleService> logger)
+    public FileLiveOpsScheduleService(
+        IWebHostEnvironment environment,
+        ILogger<FileLiveOpsScheduleService> logger,
+        ILiveOpsScheduleItemProvider liveOpsScheduleItemProvider,
+        ISystemClock clock)
     {
         _environment = environment;
         _logger = logger;
+        _liveOpsScheduleItemProvider = liveOpsScheduleItemProvider;
+        _clock = clock;
     }
 
-    public async Task<IReadOnlyList<PublicLiveOpsScheduleItemDto>> GetScheduleAsync(CancellationToken ct = default)
+    public async Task<PublicLiveOpsScheduleResponseDto> GetScheduleAsync(CancellationToken ct = default)
+    {
+        var result = await LoadFileItemsAsync(ct);
+        var generatedItems = await _liveOpsScheduleItemProvider.GetItemsAsync(ct);
+        foreach (var generatedItem in generatedItems)
+        {
+            result.Add(new PublicLiveOpsScheduleItemDto
+            {
+                Id = generatedItem.Id,
+                EventType = generatedItem.EventType,
+                StartTimeUtc = UnixTimeHelper.ToUtcIsoString(generatedItem.StartTimeUtcMs),
+                EndTimeUtc = UnixTimeHelper.ToUtcIsoString(generatedItem.EndTimeUtcMs),
+                Priority = generatedItem.Priority,
+                StreamId = generatedItem.StreamId,
+                CustomParams = new Dictionary<string, string>(generatedItem.CustomParams, StringComparer.Ordinal)
+            });
+        }
+
+        _logger.LogInformation(
+            "Loaded {FileItemCount} file liveops items and {GeneratedItemCount} generated liveops items.",
+            result.Count - generatedItems.Count,
+            generatedItems.Count);
+
+        return new PublicLiveOpsScheduleResponseDto
+        {
+            ServerTimeUtc = UnixTimeHelper.ToUtcIsoString(_clock.UtcNowUnixMilliseconds),
+            Items = result
+        };
+    }
+
+    private async Task<List<PublicLiveOpsScheduleItemDto>> LoadFileItemsAsync(CancellationToken ct)
     {
         var filePath = Path.Combine(_environment.ContentRootPath, "Data", ScheduleFileName);
         if (!File.Exists(filePath))
@@ -41,10 +80,18 @@ public sealed class FileLiveOpsScheduleService : ILiveOpsScheduleService
         var result = new List<PublicLiveOpsScheduleItemDto>(items.Count);
         for (var index = 0; index < items.Count; index++)
         {
-            result.Add(MapAndValidate(items[index], index));
+            var mapped = MapAndValidate(items[index], index);
+            if (string.Equals(mapped.EventType, "BattlePass", StringComparison.Ordinal))
+            {
+                _logger.LogWarning(
+                    "Ignoring file-defined BattlePass liveops item '{ScheduleItemId}'. BattlePass schedule is generated from season repository.",
+                    mapped.Id);
+                continue;
+            }
+
+            result.Add(mapped);
         }
 
-        _logger.LogInformation("Loaded {ItemCount} liveops schedule items from file.", result.Count);
         return result;
     }
 
