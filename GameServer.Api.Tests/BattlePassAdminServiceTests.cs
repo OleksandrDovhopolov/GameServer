@@ -123,6 +123,126 @@ public sealed class BattlePassAdminServiceTests
     }
 
     [Fact]
+    public async Task CreateSeasonAsync_AllowsSharedProductIdsWithAnotherSeason_AndStoresStoreLevelCatalogRecords()
+    {
+        const long now = 1_750_000_000_000;
+        var seasonRepository = new InMemoryBattlePassSeasonRepository();
+        await seasonRepository.SaveAsync(new BattlePassSeasonRecord
+        {
+            Id = "season_active",
+            Title = "Active Season",
+            StartAtUtcMs = now - 20_000,
+            EndAtUtcMs = now + 20_000,
+            MaxLevel = 2,
+            Status = BattlePassSeasonStatuses.Active,
+            ConfigVersion = "v1",
+            PremiumProductId = "battle_pass_premium",
+            PlatinumProductId = "battle_pass_platinum",
+            CreatedAtUtcMs = now - 30_000,
+            UpdatedAtUtcMs = now - 30_000
+        }, CancellationToken.None);
+
+        var productCatalogRepository = new InMemoryProductCatalogRepository();
+        var rewardDefinitions = new InMemoryRewardDefinitionRepository();
+        BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
+        var service = new BattlePassAdminService(
+            seasonRepository,
+            new InMemoryBattlePassStateRepository(),
+            productCatalogRepository,
+            rewardDefinitions,
+            new EntitlementService(new InMemoryEntitlementRepository(), new FixedClock(now), NullLogger<EntitlementService>.Instance),
+            new InMemoryPlayerEconomyRepository(),
+            new InMemoryPlayerAggregateRepository(new InMemorySaveRepository()),
+            new InMemoryPurchaseRepository(),
+            CreateBattlePassService(now, seasonRepository, rewardDefinitions: rewardDefinitions),
+            new FakeGooglePlayPurchaseVerifier(),
+            new FixedClock(now));
+
+        var response = await service.CreateSeasonAsync(new CreateBattlePassSeasonRequest
+        {
+            Id = "season_future",
+            Title = "Future Season",
+            StartAtUtc = "2025-06-20T00:00:00Z",
+            EndAtUtc = "2025-06-30T00:00:00Z",
+            MaxLevel = 2,
+            ConfigVersion = "v1",
+            PremiumProductId = "battle_pass_premium",
+            PlatinumProductId = "battle_pass_platinum"
+        }, CancellationToken.None);
+
+        Assert.True(response.Success);
+
+        var premium = await productCatalogRepository.GetByIdAsync("battle_pass_premium", CancellationToken.None);
+        Assert.NotNull(premium);
+        Assert.DoesNotContain(CatalogProductMetadataKeys.SeasonId, premium!.Metadata.Keys);
+        Assert.Equal(BattlePassPassTypes.Premium, premium.Metadata[CatalogProductMetadataKeys.PassType]);
+        Assert.Equal(PurchaseFinalizationModes.Consume, premium.Metadata[CatalogProductMetadataKeys.FinalizationMode]);
+
+        var platinum = await productCatalogRepository.GetByIdAsync("battle_pass_platinum", CancellationToken.None);
+        Assert.NotNull(platinum);
+        Assert.DoesNotContain(CatalogProductMetadataKeys.SeasonId, platinum!.Metadata.Keys);
+        Assert.Equal(BattlePassPassTypes.Platinum, platinum.Metadata[CatalogProductMetadataKeys.PassType]);
+        Assert.Equal(PurchaseFinalizationModes.Consume, platinum.Metadata[CatalogProductMetadataKeys.FinalizationMode]);
+    }
+
+    [Fact]
+    public async Task PublishSeasonAsync_RejectsIdenticalPremiumAndPlatinumProductIds()
+    {
+        const long now = 1_750_000_000_000;
+        var seasonRepository = new InMemoryBattlePassSeasonRepository();
+        await seasonRepository.SaveAsync(new BattlePassSeasonRecord
+        {
+            Id = "season_invalid",
+            Title = "Invalid Season",
+            StartAtUtcMs = now - 10_000,
+            EndAtUtcMs = now + 10_000,
+            MaxLevel = 2,
+            Status = BattlePassSeasonStatuses.Draft,
+            ConfigVersion = "v1",
+            PremiumProductId = "battle_pass_shared",
+            PlatinumProductId = "battle_pass_shared",
+            CreatedAtUtcMs = now - 20_000,
+            UpdatedAtUtcMs = now - 20_000
+        }, CancellationToken.None);
+        await seasonRepository.SaveLevelsAsync("season_invalid", BattlePassTestFactory.CreateLevels("season_invalid"), CancellationToken.None);
+
+        var rewardDefinitions = new InMemoryRewardDefinitionRepository();
+        BattlePassTestFactory.SeedRewardDefinitions(rewardDefinitions);
+        var productCatalogRepository = new InMemoryProductCatalogRepository();
+        await productCatalogRepository.SaveAsync(new CatalogProductRecord
+        {
+            ProductId = "battle_pass_shared",
+            Platform = PurchasePlatforms.GooglePlay,
+            PurchaseType = PurchaseTypes.BattlePass,
+            EntitlementType = EntitlementTypes.BattlePass,
+            Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [CatalogProductMetadataKeys.PassType] = BattlePassPassTypes.Premium,
+                [CatalogProductMetadataKeys.FinalizationMode] = PurchaseFinalizationModes.Consume
+            }
+        }, CancellationToken.None);
+
+        var service = new BattlePassAdminService(
+            seasonRepository,
+            new InMemoryBattlePassStateRepository(),
+            productCatalogRepository,
+            rewardDefinitions,
+            new EntitlementService(new InMemoryEntitlementRepository(), new FixedClock(now), NullLogger<EntitlementService>.Instance),
+            new InMemoryPlayerEconomyRepository(),
+            new InMemoryPlayerAggregateRepository(new InMemorySaveRepository()),
+            new InMemoryPurchaseRepository(),
+            CreateBattlePassService(now, seasonRepository, rewardDefinitions: rewardDefinitions),
+            new FakeGooglePlayPurchaseVerifier(),
+            new FixedClock(now));
+
+        var response = await service.PublishSeasonAsync("season_invalid", CancellationToken.None);
+
+        Assert.False(response.Success);
+        Assert.Equal(BattlePassErrorCodes.SeasonValidationFailed, response.ErrorCode);
+        Assert.Equal("Premium and platinum battle pass products must be different.", response.ErrorMessage);
+    }
+
+    [Fact]
     public async Task RecreateSeasonAsync_CreatesPublishesAndBootstrapsPlayers()
     {
         const long now = 1_750_000_000_000;
@@ -211,6 +331,14 @@ public sealed class BattlePassAdminServiceTests
         var save = await saveRepository.LoadAsync("test-player-1", CancellationToken.None);
         Assert.NotNull(save);
         Assert.DoesNotContain("EventStates", save!.Data, StringComparison.Ordinal);
+
+        var premium = await productCatalogRepository.GetByIdAsync("battle_pass_premium_test", CancellationToken.None);
+        Assert.NotNull(premium);
+        Assert.DoesNotContain(CatalogProductMetadataKeys.SeasonId, premium!.Metadata.Keys);
+
+        var platinum = await productCatalogRepository.GetByIdAsync("battle_pass_platinum_test", CancellationToken.None);
+        Assert.NotNull(platinum);
+        Assert.DoesNotContain(CatalogProductMetadataKeys.SeasonId, platinum!.Metadata.Keys);
     }
 
     [Fact]

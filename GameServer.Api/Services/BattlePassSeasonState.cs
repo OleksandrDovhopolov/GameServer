@@ -55,7 +55,6 @@ public static class BattlePassSeasonState
 
     public static bool IsPurchasable(string status)
     {
-        return string.Equals(status, BattlePassSeasonStatuses.Scheduled, StringComparison.Ordinal) ||
-               string.Equals(status, BattlePassSeasonStatuses.Active, StringComparison.Ordinal);
+        return string.Equals(status, BattlePassSeasonStatuses.Active, StringComparison.Ordinal);
     }
 }

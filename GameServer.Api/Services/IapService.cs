@@ -92,18 +92,16 @@ public sealed class IapService : IIapService
             return BuildVerifyFailure("Product was not found.", BattlePassErrorCodes.ProductNotFound);
         }
 
-        if (!product.Metadata.TryGetValue(CatalogProductMetadataKeys.SeasonId, out var catalogSeasonId) ||
-            !string.Equals(catalogSeasonId, request.SeasonId, StringComparison.Ordinal))
+        if (!string.Equals(product.PurchaseType, PurchaseTypes.BattlePass, StringComparison.Ordinal) ||
+            !string.Equals(product.EntitlementType, EntitlementTypes.BattlePass, StringComparison.Ordinal))
         {
-            return BuildVerifyFailure("Product does not belong to the requested season.", BattlePassErrorCodes.ProductNotFound);
+            return BuildVerifyFailure("Product was not found.", BattlePassErrorCodes.ProductNotFound);
         }
 
-        var requestedPassType = product.Metadata.TryGetValue(CatalogProductMetadataKeys.PassType, out var productPassType)
-            ? productPassType
-            : BattlePassPassTypes.None;
+        var requestedPassType = GetRequestedPassType(normalizedSeason, request.ProductId);
         if (string.Equals(requestedPassType, BattlePassPassTypes.None, StringComparison.Ordinal))
         {
-            return BuildVerifyFailure("Product pass type is not configured.", BattlePassErrorCodes.ProductNotFound);
+            return BuildVerifyFailure("Product does not belong to the requested season.", BattlePassErrorCodes.ProductNotFound);
         }
 
         if (!product.Metadata.TryGetValue(CatalogProductMetadataKeys.FinalizationMode, out var finalizationMode) ||
@@ -708,6 +706,21 @@ public sealed class IapService : IIapService
             Key = entitlement.EntitlementKey,
             Status = entitlement.Status
         };
+    }
+
+    private static string GetRequestedPassType(BattlePassSeasonRecord season, string productId)
+    {
+        if (string.Equals(season.PremiumProductId, productId, StringComparison.Ordinal))
+        {
+            return BattlePassPassTypes.Premium;
+        }
+
+        if (string.Equals(season.PlatinumProductId, productId, StringComparison.Ordinal))
+        {
+            return BattlePassPassTypes.Platinum;
+        }
+
+        return BattlePassPassTypes.None;
     }
 
     private static bool CanGrantPass(string currentPassType, string requestedPassType)

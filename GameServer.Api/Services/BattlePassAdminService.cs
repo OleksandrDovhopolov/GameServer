@@ -642,6 +642,11 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             return "endAtUtc must be greater than startAtUtc.";
         }
 
+        if (string.Equals(season.PremiumProductId, season.PlatinumProductId, StringComparison.Ordinal))
+        {
+            return "Premium and platinum battle pass products must be different.";
+        }
+
         if (levels.Count != season.MaxLevel + 1)
         {
             return "Configured levels count must match maxLevel + 1.";
@@ -701,36 +706,27 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
 
     private async Task UpsertProductCatalogAsync(BattlePassSeasonRecord season, CancellationToken ct)
     {
+        await UpsertBattlePassProductAsync(season.PremiumProductId, BattlePassPassTypes.Premium, ct);
+        await UpsertBattlePassProductAsync(season.PlatinumProductId, BattlePassPassTypes.Platinum, ct);
+    }
+
+    private async Task UpsertBattlePassProductAsync(string productId, string passType, CancellationToken ct)
+    {
         var nowUtcMs = _clock.UtcNowUnixMilliseconds;
-        await _productCatalogRepository.SaveAsync(new CatalogProductRecord
-        {
-            ProductId = season.PremiumProductId,
-            Platform = PurchasePlatforms.GooglePlay,
-            PurchaseType = PurchaseTypes.BattlePass,
-            EntitlementType = EntitlementTypes.BattlePass,
-            Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
-            {
-                [CatalogProductMetadataKeys.SeasonId] = season.Id,
-                [CatalogProductMetadataKeys.PassType] = BattlePassPassTypes.Premium,
-                [CatalogProductMetadataKeys.FinalizationMode] = PurchaseFinalizationModes.Consume
-            },
-            CreatedAtUtcMs = nowUtcMs,
-            UpdatedAtUtcMs = nowUtcMs
-        }, ct);
+        var existing = await _productCatalogRepository.GetByIdAsync(productId, ct);
 
         await _productCatalogRepository.SaveAsync(new CatalogProductRecord
         {
-            ProductId = season.PlatinumProductId,
+            ProductId = productId,
             Platform = PurchasePlatforms.GooglePlay,
             PurchaseType = PurchaseTypes.BattlePass,
             EntitlementType = EntitlementTypes.BattlePass,
             Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [CatalogProductMetadataKeys.SeasonId] = season.Id,
-                [CatalogProductMetadataKeys.PassType] = BattlePassPassTypes.Platinum,
+                [CatalogProductMetadataKeys.PassType] = passType,
                 [CatalogProductMetadataKeys.FinalizationMode] = PurchaseFinalizationModes.Consume
             },
-            CreatedAtUtcMs = nowUtcMs,
+            CreatedAtUtcMs = existing?.CreatedAtUtcMs ?? nowUtcMs,
             UpdatedAtUtcMs = nowUtcMs
         }, ct);
     }
@@ -820,6 +816,14 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             return false;
         }
 
+        var normalizedPremiumProductId = premiumProductId.Trim();
+        var normalizedPlatinumProductId = platinumProductId.Trim();
+        if (string.Equals(normalizedPremiumProductId, normalizedPlatinumProductId, StringComparison.Ordinal))
+        {
+            errorMessage = "Premium and platinum battle pass products must be different.";
+            return false;
+        }
+
         if (!DateTimeOffset.TryParse(startAtUtc, out var parsedStart) ||
             !DateTimeOffset.TryParse(endAtUtc, out var parsedEnd))
         {
@@ -842,8 +846,8 @@ public sealed class BattlePassAdminService : IBattlePassAdminService
             MaxLevel = maxLevel,
             Status = status,
             ConfigVersion = configVersion,
-            PremiumProductId = premiumProductId,
-            PlatinumProductId = platinumProductId,
+            PremiumProductId = normalizedPremiumProductId,
+            PlatinumProductId = normalizedPlatinumProductId,
             CreatedAtUtcMs = createdAtUtcMs,
             UpdatedAtUtcMs = updatedAtUtcMs
         };

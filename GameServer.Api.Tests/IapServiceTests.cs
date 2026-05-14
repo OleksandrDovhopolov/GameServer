@@ -15,7 +15,6 @@ public sealed class IapServiceTests
         var context = await CreateContextAsync(now, "p1");
         await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
             "battle_pass_premium_season_1",
-            "season_1",
             BattlePassPassTypes.Premium,
             PurchaseFinalizationModes.Consume), CancellationToken.None);
 
@@ -64,7 +63,6 @@ public sealed class IapServiceTests
         var context = await CreateContextAsync(now, "p1", "p2");
         await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
             "battle_pass_premium_season_1",
-            "season_1",
             BattlePassPassTypes.Premium,
             PurchaseFinalizationModes.Consume), CancellationToken.None);
 
@@ -115,7 +113,6 @@ public sealed class IapServiceTests
             CancellationToken.None);
         await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
             "battle_pass_platinum_season_1",
-            "season_1",
             BattlePassPassTypes.Platinum,
             PurchaseFinalizationModes.Consume), CancellationToken.None);
 
@@ -152,7 +149,6 @@ public sealed class IapServiceTests
         var context = await CreateContextAsync(now, "p1");
         await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
             "battle_pass_premium_season_1",
-            "season_1",
             BattlePassPassTypes.Premium,
             PurchaseFinalizationModes.Consume), CancellationToken.None);
 
@@ -186,7 +182,6 @@ public sealed class IapServiceTests
         var context = await CreateContextAsync(now, "p1");
         await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
             "battle_pass_premium_season_1",
-            "season_1",
             BattlePassPassTypes.Premium,
             PurchaseFinalizationModes.Acknowledge), CancellationToken.None);
 
@@ -237,7 +232,6 @@ public sealed class IapServiceTests
         var context = await CreateContextAsync(now, "p1");
         await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
             "battle_pass_premium_season_1",
-            "season_1",
             BattlePassPassTypes.Premium,
             PurchaseFinalizationModes.Consume), CancellationToken.None);
 
@@ -262,13 +256,118 @@ public sealed class IapServiceTests
     }
 
     [Fact]
+    public async Task VerifyGooglePurchaseAsync_AllowsSharedProductIdsForFutureScheduledSeason()
+    {
+        const long now = 1_750_000_000_000;
+        var context = await CreateContextAsync(now, "p1");
+        await context.SeasonRepository.SaveAsync(new BattlePassSeasonRecord
+        {
+            Id = "season_2",
+            Title = "Season 2",
+            StartAtUtcMs = now + 20_000,
+            EndAtUtcMs = now + 40_000,
+            MaxLevel = 2,
+            Status = BattlePassSeasonStatuses.Scheduled,
+            ConfigVersion = "v1",
+            PremiumProductId = "battle_pass_premium_season_1",
+            PlatinumProductId = "battle_pass_platinum_season_1",
+            CreatedAtUtcMs = now - 1000,
+            UpdatedAtUtcMs = now - 1000
+        }, CancellationToken.None);
+
+        await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
+            "battle_pass_premium_season_1",
+            BattlePassPassTypes.Premium,
+            PurchaseFinalizationModes.Consume), CancellationToken.None);
+
+        context.Verifier.SeedVerify("token_shared", new GameServer.Api.Services.Interfaces.GooglePlayPurchaseVerificationResult
+        {
+            Success = true,
+            ProductId = "battle_pass_premium_season_1",
+            PurchaseState = "purchased",
+            ProviderPayloadJson = "{}"
+        });
+        context.Verifier.SeedConsume("token_shared", new GameServer.Api.Services.Interfaces.GooglePlayConsumeResult
+        {
+            Success = true,
+            ProviderPayloadJson = "{}"
+        });
+
+        var response = await context.Service.VerifyGooglePurchaseAsync(new VerifyGooglePurchaseRequest
+        {
+            PlayerId = "p1",
+            ProductId = "battle_pass_premium_season_1",
+            PurchaseToken = "token_shared",
+            SeasonId = "season_1"
+        }, CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.Equal(VerifyGooglePurchaseStatuses.VerifiedAndConsumed, response.PurchaseStatus);
+        Assert.Equal(BattlePassPassTypes.Premium, response.BattlePass!.PassType);
+    }
+
+    [Fact]
+    public async Task VerifyGooglePurchaseAsync_RejectsScheduledSeasonPurchase()
+    {
+        const long now = 1_750_000_000_000;
+        var context = await CreateContextAsync(now, "p1");
+        await context.SeasonRepository.SaveAsync(new BattlePassSeasonRecord
+        {
+            Id = "season_2",
+            Title = "Season 2",
+            StartAtUtcMs = now + 20_000,
+            EndAtUtcMs = now + 40_000,
+            MaxLevel = 2,
+            Status = BattlePassSeasonStatuses.Scheduled,
+            ConfigVersion = "v1",
+            PremiumProductId = "battle_pass_premium_season_1",
+            PlatinumProductId = "battle_pass_platinum_season_1",
+            CreatedAtUtcMs = now - 1000,
+            UpdatedAtUtcMs = now - 1000
+        }, CancellationToken.None);
+
+        var response = await context.Service.VerifyGooglePurchaseAsync(new VerifyGooglePurchaseRequest
+        {
+            PlayerId = "p1",
+            ProductId = "battle_pass_premium_season_1",
+            PurchaseToken = "token_future",
+            SeasonId = "season_2"
+        }, CancellationToken.None);
+
+        Assert.False(response.Success);
+        Assert.Equal(BattlePassErrorCodes.SeasonNotPurchasable, response.ErrorCode);
+    }
+
+    [Fact]
+    public async Task VerifyGooglePurchaseAsync_RejectsProductOutsideRequestedSeason()
+    {
+        const long now = 1_750_000_000_000;
+        var context = await CreateContextAsync(now, "p1");
+        await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
+            "battle_pass_other",
+            BattlePassPassTypes.Premium,
+            PurchaseFinalizationModes.Consume), CancellationToken.None);
+
+        var response = await context.Service.VerifyGooglePurchaseAsync(new VerifyGooglePurchaseRequest
+        {
+            PlayerId = "p1",
+            ProductId = "battle_pass_other",
+            PurchaseToken = "token_other",
+            SeasonId = "season_1"
+        }, CancellationToken.None);
+
+        Assert.False(response.Success);
+        Assert.Equal(BattlePassErrorCodes.ProductNotFound, response.ErrorCode);
+        Assert.Equal(VerifyGooglePurchaseStatuses.VerifyFailed, response.PurchaseStatus);
+    }
+
+    [Fact]
     public async Task VerifyGooglePurchaseAsync_ReturnsPendingFinalizationWhenConsumeFails()
     {
         const long now = 1_750_000_000_000;
         var context = await CreateContextAsync(now, "p1");
         await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
             "battle_pass_premium_season_1",
-            "season_1",
             BattlePassPassTypes.Premium,
             PurchaseFinalizationModes.Consume), CancellationToken.None);
 
@@ -309,7 +408,6 @@ public sealed class IapServiceTests
         var context = await CreateContextAsync(now, "p1");
         await context.ProductRepository.SaveAsync(CreateBattlePassProduct(
             "battle_pass_premium_season_1",
-            "season_1",
             BattlePassPassTypes.Premium,
             PurchaseFinalizationModes.Consume), CancellationToken.None);
 
@@ -406,6 +504,7 @@ public sealed class IapServiceTests
         return new IapServiceTestContext(
             service,
             verifier,
+            seasonRepository,
             productRepository,
             purchaseRepository,
             entitlementService);
@@ -413,7 +512,6 @@ public sealed class IapServiceTests
 
     private static CatalogProductRecord CreateBattlePassProduct(
         string productId,
-        string seasonId,
         string passType,
         string finalizationMode)
     {
@@ -425,7 +523,6 @@ public sealed class IapServiceTests
             EntitlementType = EntitlementTypes.BattlePass,
             Metadata = new Dictionary<string, string>(StringComparer.Ordinal)
             {
-                [CatalogProductMetadataKeys.SeasonId] = seasonId,
                 [CatalogProductMetadataKeys.PassType] = passType,
                 [CatalogProductMetadataKeys.FinalizationMode] = finalizationMode
             }
@@ -435,6 +532,7 @@ public sealed class IapServiceTests
     private sealed record IapServiceTestContext(
         IapService Service,
         FakeGooglePlayPurchaseVerifier Verifier,
+        InMemoryBattlePassSeasonRepository SeasonRepository,
         InMemoryProductCatalogRepository ProductRepository,
         InMemoryPurchaseRepository PurchaseRepository,
         EntitlementService EntitlementService);
