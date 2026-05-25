@@ -3,3 +3,23 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.env
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+
+# User-specific IDE files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db

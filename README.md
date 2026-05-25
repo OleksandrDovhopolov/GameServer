@@ -1,64 +1,128 @@
 # GameServer
-PetGameServer
 
-## Hybrid Save System (PostgreSQL + Redis) - Manual Verification
+C#/.NET backend for a mobile card game prototype.
 
-### 1) Start dependencies
-1. Run from the `GameServer` folder:
-   - `docker compose up --build`
-2. Confirm all containers are up: `api`, `redis`, `postgres`.
+## Features
 
-### 2) First-time `Load` creates PostgreSQL record and returns default
-1. Call:
-   - `GET http://localhost:5000/api/v1/save/global?playerId=test-player-1`
-2. Expect `200 OK` with:
-   - `Data` equals `""` (empty string)
-   - `LastModified` is a unix-millis value
-3. Verify the PostgreSQL row exists:
-   - `docker compose exec postgres psql -U postgres -d game_server -c "select player_id, last_modified_at from player_saves where player_id = 'test-player-1';"`
+- Player cloud save (JSON blob per player)
+- Resource management (Gold, Gems, Energy)
+- Inventory system (card packs, items)
+- Fortune Wheel with weighted rewards and spin regeneration
+- Reward Intents — exactly-once ad-network callback flow
+- Battle Pass (seasons, XP, levels, free/premium tracks)
+- Google Play IAP verification
+- Live Ops schedule (time-based card collection events)
+- Admin API (Basic Auth protected)
+- Docker Compose local environment
+- xUnit tests
 
-### 3) Subsequent `Load` hits Redis (via logs)
-1. Call the same `GET` again.
-2. Check API logs for `HybridSaveRepository: Redis hit for test-player-1`.
+## Tech Stack
 
-### 4) `Save` updates PostgreSQL and refreshes Redis (TTL)
-1. Call:
-   - `POST http://localhost:5000/api/v1/save/global`
-2. Body example:
-```json
-{"playerId":"test-player-1","data":"{\"foo\":\"bar\"}"}
+- C# / .NET 9
+- ASP.NET Core
+- Redis (primary data store)
+- PostgreSQL + Dapper (configured, not yet active)
+- Google Play Publisher API
+- Docker Compose
+- xUnit
+
+## Architecture
+
 ```
-3. Verify PostgreSQL row was updated:
-   - `docker compose exec postgres psql -U postgres -d game_server -c "select player_id, save_data, last_modified_at from player_saves where player_id = 'test-player-1';"`
-4. Verify Redis keys were updated:
-   - Run a Redis CLI (optional): `docker compose exec redis redis-cli`
-   - Check:
-     - `GET save:test-player-1`
-     - `GET save:test-player-1:meta`
+Client → API Controllers → Service Layer → Redis
+                                        ↘ Data/*.json (reward/card/schedule definitions)
+```
 
-### Notes
-- Hybrid load returns default state if both Redis and PostgreSQL misses/failures occur.
-- Player save and metadata keys are persisted without expiration.
+Admin endpoints require Basic Auth (`AdminAuth` config section).  
+Google Play billing is disabled in Development (`GooglePlayBilling:Enabled=false`).
 
-## Google Play Battle Pass verify
+## Local Setup
 
-- Backend verify endpoint stays `POST /api/v1/iap/google/verify` with `playerId`, `productId`, `purchaseToken`, `seasonId`.
-- Real Google Play verification is disabled by default in Development. Production-like environments must enable it.
-- Required config:
-  - `GooglePlayBilling__Enabled=true`
-  - `GooglePlayBilling__PackageName=<android applicationId>`
-  - `GooglePlayBilling__ServiceAccountJson=<full JSON key as one secret variable>` or `GooglePlayBilling__ServiceAccountKeyFile=/run/secrets/google-play-service-account.json`
-- Railway recommendation:
-  - Prefer `GooglePlayBilling__ServiceAccountJson` as a secret variable
-  - No volume is required when JSON is passed directly in env
-- Local docker example:
-  - Set `GOOGLE_PLAY_BILLING__ENABLED=true`
-  - Set `GOOGLE_PLAY_BILLING__PACKAGE_NAME=<android applicationId>`
-  - Set `GOOGLE_PLAY_BILLING__SERVICE_ACCOUNT_JSON=<full JSON key>`
-  - Optionally use `GOOGLE_PLAY_BILLING__SERVICE_ACCOUNT_KEY_FILE` with a mounted file instead
-- Google Play Console setup:
-  - Add the service account in `Users & permissions`
-  - Grant `View financial data, orders, and cancellation survey responses`
-  - Grant `Manage orders and subscriptions`
-  - Ensure the battle pass one-time products are active and published
-  - Ensure the tester is in both the testing track and `Settings > License testing`
+**Prerequisites:** .NET 9 SDK, Docker
+
+```bash
+# Start Redis
+docker-compose up redis
+
+# Run API (Swagger at http://localhost:5000/swagger)
+dotnet run --project GameServer.Api
+
+# Or run full stack
+docker-compose up
+```
+
+## Configuration
+
+| Key | Default | Notes |
+|---|---|---|
+| `Redis:ConnectionString` | `localhost:6379` | Required |
+| `AdminAuth:Username` | `admin` | Admin API access |
+| `AdminAuth:Password` | `admin` | Admin API access |
+| `AdminTools:AllowRedisFlush` | `false` | Enable flush endpoint |
+| `GooglePlayBilling:Enabled` | `false` | Must be `false` in Development |
+| `GooglePlayBilling:PackageName` | — | Android application ID |
+| `GooglePlayBilling:ServiceAccountJson` | — | Full JSON key as env variable |
+
+## Google Play IAP Setup
+
+Endpoint: `POST /api/v1/iap/google/verify` — accepts `playerId`, `productId`, `purchaseToken`, `seasonId`.
+
+Real verification is disabled by default. To enable:
+
+```
+GooglePlayBilling__Enabled=true
+GooglePlayBilling__PackageName=<android applicationId>
+GooglePlayBilling__ServiceAccountJson=<full JSON key>
+```
+
+Google Play Console requirements:
+- Add service account under **Users & permissions**
+- Grant **View financial data** and **Manage orders and subscriptions**
+- Ensure products are active and published
+- Tester must be in the testing track and **Settings > License testing**
+
+## API Overview
+
+### Player (`/api/v1/`)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/ping` | Health check |
+| POST | `/save/global` | Save player data |
+| GET | `/save/global` | Load player data |
+| POST | `/resources/adjust` | Add/subtract Gold, Gems, Energy |
+| POST | `/inventory/remove` | Remove item from inventory |
+| POST | `/rewards/grant` | Grant reward by ID |
+| POST | `/rewards/intent/create` | Create reward intent (before ad) |
+| GET | `/rewards/intent/callback` | Ad network callback (delivers reward) |
+| GET | `/wheel/data` | Spin state and available spins |
+| POST | `/wheel/spin` | Spin the fortune wheel |
+| POST | `/packs/open` | Open a card pack |
+| GET | `/battle-pass/current` | Current season and player state |
+| POST | `/battle-pass/claim` | Claim reward at level |
+| POST | `/battle-pass/xp/add` | Add XP |
+| POST | `/iap/google/verify` | Verify Google Play purchase |
+| GET | `/liveops/schedule` | Active event schedule |
+
+### Admin (`/api/admin/`, Basic Auth)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/player/{id}` | Raw player save |
+| DELETE | `/player/{id}` | Delete player data |
+| POST | `/player/{id}/spins` | Adjust fortune wheel spins |
+| POST | `/inventory/add` | Add item to inventory |
+| POST | `/battle-pass/seasons` | Create season |
+| PUT | `/battle-pass/seasons/{id}/levels` | Set season levels |
+| POST | `/battle-pass/seasons/{id}/publish` | Publish season |
+| POST | `/entitlements/grant` | Grant premium pass |
+| POST | `/test/redis/flush` | Flush Redis (disabled by default) |
+
+## Running Tests
+
+```bash
+dotnet test GameServer.sln
+
+# Single test class
+dotnet test GameServer.Api.Tests --filter "FullyQualifiedName~BattlePassServiceTests"
+```
