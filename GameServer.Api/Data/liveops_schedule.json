@@ -14,27 +14,14 @@
   },
   {
     "Id": "Spring_Collection",
-    "EventType": "CardCollection",
-    "StartTimeUtc": "2026-04-27T22:25:43.4664352+00:00",
-    "EndTimeUtc": "2026-05-27T22:34:03.4664352+00:00",
-    "Priority": 10,
-    "StreamId": "card_collection_seasons",
-    "CustomParams": {
-      "eventId": "Spring_Collection",
-      "collectionName": "Spring Collection",
-      "eventConfigAddress": "event_spring_collection_config"
-    }
-  },
-  {
-    "Id": "June_Collection",
-    "EventType": "CardCollection",
+    "EventType": "Spring_Collection",
     "StartTimeUtc": "2026-05-27T22:34:03.4664352+00:00",
     "EndTimeUtc": "2026-06-30T22:34:03.4664352+00:00",
     "Priority": 10,
     "StreamId": "card_collection_seasons",
     "CustomParams": {
       "eventId": "Spring_Collection",
-      "collectionName": "June Collection",
+      "collectionName": "Spring Collection",
       "eventConfigAddress": "event_spring_collection_config"
     }
   },
