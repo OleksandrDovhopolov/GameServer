@@ -14,7 +14,7 @@
   },
   {
     "Id": "Spring_Collection",
-    "EventType": "Spring_Collection",
+    "EventType": "CardCollection",
     "StartTimeUtc": "2026-05-27T22:34:03.4664352+00:00",
     "EndTimeUtc": "2026-06-30T22:34:03.4664352+00:00",
     "Priority": 10,
