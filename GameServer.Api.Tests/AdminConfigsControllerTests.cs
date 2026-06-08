@@ -36,6 +36,7 @@ public sealed class AdminConfigsControllerTests
         var result = await controller.Publish(
             "books",
             "dev",
+            "\"abc\"",
             new PublishConfigRequest { Json = JsonDocument.Parse("[{\"id\":\"x\"}]").RootElement },
             CancellationToken.None);
 
@@ -58,6 +59,7 @@ public sealed class AdminConfigsControllerTests
         var result = await controller.Publish(
             "books",
             "dev",
+            "\"abc\"",
             new PublishConfigRequest { Json = JsonDocument.Parse("[{\"id\":\"x\"}]").RootElement },
             CancellationToken.None);
 

@@ -40,13 +40,13 @@ public sealed class AdminConfigsController : ControllerBase
     public async Task<IActionResult> Publish(
         [FromRoute] string name,
         [FromQuery] string environment,
+        [FromHeader(Name = "If-Match")] string? ifMatch,
         [FromBody] PublishConfigRequest request,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(environment))
             return BadRequest("'environment' query parameter is required.");
 
-        var ifMatch = Request.Headers.IfMatch.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(ifMatch))
             return BadRequest("If-Match header is required.");
 
