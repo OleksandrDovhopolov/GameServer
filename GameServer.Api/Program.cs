@@ -49,6 +49,16 @@ var googlePlayBillingOptions = builder.Configuration.GetSection(GooglePlayBillin
 LogGooglePlayBillingConfigurationState(builder.Environment, googlePlayBillingOptions);
 ValidateGooglePlayBillingConfiguration(builder.Environment, googlePlayBillingOptions);
 
+builder.Services.AddSingleton(sp =>
+{
+    var postgresOptions = sp.GetRequiredService<IOptions<PostgresOptions>>().Value;
+    if (string.IsNullOrWhiteSpace(postgresOptions.ConnectionString))
+        throw new InvalidOperationException("Postgres:ConnectionString is not configured.");
+    return Npgsql.NpgsqlDataSource.Create(postgresOptions.ConnectionString);
+});
+builder.Services.AddScoped<IConfigRepository, PostgresConfigRepository>();
+builder.Services.AddScoped<IConfigService, ConfigService>();
+
 builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 {
     var redisOptions = serviceProvider.GetRequiredService<IOptions<RedisOptions>>().Value;

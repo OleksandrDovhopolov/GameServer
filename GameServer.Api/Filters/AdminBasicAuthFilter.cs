@@ -9,6 +9,7 @@ namespace GameServer.Api.Filters;
 
 public sealed class AdminBasicAuthFilter : IAsyncAuthorizationFilter
 {
+    public const string AuthenticatedUserItemKey = "AdminUsername";
     private const string AuthorizationHeaderName = "Authorization";
     private const string WwwAuthenticateHeaderName = "WWW-Authenticate";
     private const string WwwAuthenticateHeaderValue = "Basic realm=\"Admin API\"";
@@ -67,6 +68,7 @@ public sealed class AdminBasicAuthFilter : IAsyncAuthorizationFilter
             return Task.CompletedTask;
         }
 
+        context.HttpContext.Items[AuthenticatedUserItemKey] = suppliedUser;
         return Task.CompletedTask;
     }
 

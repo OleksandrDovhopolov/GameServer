@@ -20,8 +20,11 @@ public sealed class AdminBasicAuthOperationFilter : IOperationFilter
         }
 
         var relativePath = context.ApiDescription.RelativePath ?? string.Empty;
-        if (!relativePath.StartsWith("api/admin/", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(relativePath, "api/admin", StringComparison.OrdinalIgnoreCase))
+        var isAdminRoute =
+            relativePath.StartsWith("api/admin/", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(relativePath, "api/admin", StringComparison.OrdinalIgnoreCase);
+
+        if (!isAdminRoute)
         {
             return;
         }

@@ -60,6 +60,7 @@ public sealed class AdminBasicAuthFilterTests
             await filter.OnAuthorizationAsync(context);
 
             Assert.Null(context.Result);
+            Assert.Equal("admin", context.HttpContext.Items[AdminBasicAuthFilter.AuthenticatedUserItemKey]);
         });
     }
 

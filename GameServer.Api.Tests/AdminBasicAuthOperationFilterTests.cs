@@ -43,6 +43,22 @@ public sealed class AdminBasicAuthOperationFilterTests
         Assert.False(operation.Responses.ContainsKey("401"));
     }
 
+    [Fact]
+    public void Apply_V1AdminRoute_DoesNotAddSecurity()
+    {
+        var filter = new AdminBasicAuthOperationFilter();
+        var operation = new OpenApiOperation
+        {
+            Responses = new OpenApiResponses()
+        };
+        var context = CreateContext("api/v1/admin/configs/books");
+
+        filter.Apply(operation, context);
+
+        Assert.True(operation.Security is null || operation.Security.Count == 0);
+        Assert.False(operation.Responses.ContainsKey("401"));
+    }
+
     private static OperationFilterContext CreateContext(string relativePath)
     {
         var apiDescription = new ApiDescription
