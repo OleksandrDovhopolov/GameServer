@@ -226,4 +226,6 @@ configs(
 - [ ] Auth для `/admin/*` (роли editor/publisher), аудит updated_by/at/comment.
 - [ ] Таблица `configs` (история версиями).
 
-Связанные документы: [CONFIG_CACHE_SYSTEM.md](CONFIG_CACHE_SYSTEM.md) — клиентская архитектура целиком.
+Связанные документы:
+- [ADR-001-config-section-snapshot-storage.md](ADR-001-config-section-snapshot-storage.md) — почему секции хранятся как versioned snapshot целиком.
+- [CONFIG_CACHE_SYSTEM.md](CONFIG_CACHE_SYSTEM.md) — клиентская архитектура целиком.
