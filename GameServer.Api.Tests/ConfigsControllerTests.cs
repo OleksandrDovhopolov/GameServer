@@ -115,6 +115,9 @@ public sealed class ConfigsControllerTests
         public Task<AdminConfigOperationResult> GetAdminConfigAsync(string name, string environment, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
 
+        public Task<AdminConfigOperationResult> GetAdminConfigVersionAsync(string name, string environment, long version, CancellationToken cancellationToken) =>
+            throw new NotImplementedException();
+
         public Task<ConfigHistoryEntryDto[]> GetHistoryAsync(string name, string environment, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
 

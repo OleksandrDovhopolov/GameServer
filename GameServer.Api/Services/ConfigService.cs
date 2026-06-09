@@ -48,6 +48,18 @@ public sealed class ConfigService : IConfigService
             : AdminConfigOperationResult.Success(ToAdminDto(record));
     }
 
+    public async Task<AdminConfigOperationResult> GetAdminConfigVersionAsync(
+        string name,
+        string environment,
+        long version,
+        CancellationToken cancellationToken)
+    {
+        var record = await _repository.GetByVersionAsync(name, environment, version, cancellationToken);
+        return record is null
+            ? AdminConfigOperationResult.NotFound()
+            : AdminConfigOperationResult.Success(ToAdminDto(record));
+    }
+
     public async Task<ConfigHistoryEntryDto[]> GetHistoryAsync(string name, string environment, CancellationToken cancellationToken)
     {
         var records = await _repository.GetHistoryAsync(name, environment, cancellationToken);

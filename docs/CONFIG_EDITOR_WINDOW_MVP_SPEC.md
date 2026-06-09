@@ -169,6 +169,7 @@ Editor использует только существующие endpoint-ы:
 - `GET /api/admin/configs/{name}?environment=...`
 - `PUT /api/admin/configs/{name}?environment=...`
 - `GET /api/admin/configs/{name}/history?environment=...`
+- `GET /api/admin/configs/{name}/versions/{version}?environment=...`
 - `POST /api/admin/configs/{name}/rollback?environment=...&to=...`
 - `POST /api/admin/configs/{name}/promote?from=dev&to=prod`
 
@@ -182,6 +183,7 @@ Editor должен сам:
 - подставлять `Authorization: Basic ...`
 - хранить и передавать `If-Match`
 - читать `ETag` из ответа
+- не ожидать отдельный `ETag` header от `GET /versions/{version}`; для исторической версии использовать `etag` из body
 
 Пользователь не должен работать с `ETag` вручную.
 
@@ -361,6 +363,13 @@ No auto-merge в MVP.
 
 Кнопка `History` открывает popup/window со списком версий.
 
+Важно:
+
+- `/history` используется только для metadata списка версий
+- полный `json` каждой версии не должен загружаться через `/history`
+- при выборе конкретной версии editor делает lazy-load через
+  `GET /api/admin/configs/{name}/versions/{version}?environment=...`
+
 Колонки:
 
 - `Version`
@@ -373,6 +382,9 @@ No auto-merge в MVP.
 
 - `View JSON`
 - `Rollback`
+- `Load For Diff`
+
+`View JSON` и `Load For Diff` должны сначала загрузить выбранную версию отдельным endpoint-ом версии.
 
 ### 8.10 Rollback
 

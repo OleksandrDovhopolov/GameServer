@@ -67,6 +67,56 @@ public sealed class AdminConfigsControllerTests
         Assert.Equal(StatusCodes.Status412PreconditionFailed, status.StatusCode);
     }
 
+    [Fact]
+    public async Task GetConfigVersion_WhenFound_ReturnsOkAndEtag()
+    {
+        var service = new StubConfigService
+        {
+            VersionResult = AdminConfigOperationResult.Success(new AdminConfigDto
+            {
+                Name = "books",
+                Environment = "dev",
+                Version = 3,
+                Etag = "etag-3",
+                Json = JsonDocument.Parse("[{\"id\":\"book_dune\"}]").RootElement
+            })
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.GetConfigVersion("books", 3, "dev", CancellationToken.None);
+
+        var ok = Assert.IsType<OkObjectResult>(result);
+        var dto = Assert.IsType<AdminConfigDto>(ok.Value);
+        Assert.Equal(3, dto.Version);
+        Assert.Equal("etag-3", dto.Etag);
+        Assert.False(controller.Response.Headers.ContainsKey("ETag"));
+    }
+
+    [Fact]
+    public async Task GetConfigVersion_WhenMissing_ReturnsNotFound()
+    {
+        var service = new StubConfigService
+        {
+            VersionResult = AdminConfigOperationResult.NotFound()
+        };
+        var controller = CreateController(service);
+
+        var result = await controller.GetConfigVersion("books", 999, "dev", CancellationToken.None);
+
+        Assert.IsType<NotFoundResult>(result);
+    }
+
+    [Fact]
+    public async Task GetConfigVersion_WhenEnvironmentMissing_ReturnsBadRequest()
+    {
+        var service = new StubConfigService();
+        var controller = CreateController(service);
+
+        var result = await controller.GetConfigVersion("books", 3, string.Empty, CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
     private static AdminConfigsController CreateController(StubConfigService service)
     {
         return new AdminConfigsController(service)
@@ -88,6 +138,8 @@ public sealed class AdminConfigsControllerTests
     {
         public AdminConfigOperationResult PublishResult { get; set; } = AdminConfigOperationResult.NotFound();
 
+        public AdminConfigOperationResult VersionResult { get; set; } = AdminConfigOperationResult.NotFound();
+
         public Task<ConfigManifestEntryDto[]> GetManifestAsync(string environment, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
 
@@ -96,6 +148,9 @@ public sealed class AdminConfigsControllerTests
 
         public Task<AdminConfigOperationResult> GetAdminConfigAsync(string name, string environment, CancellationToken cancellationToken) =>
             throw new NotImplementedException();
+
+        public Task<AdminConfigOperationResult> GetAdminConfigVersionAsync(string name, string environment, long version, CancellationToken cancellationToken) =>
+            Task.FromResult(VersionResult);
 
         public Task<ConfigHistoryEntryDto[]> GetHistoryAsync(string name, string environment, CancellationToken cancellationToken) =>
             throw new NotImplementedException();

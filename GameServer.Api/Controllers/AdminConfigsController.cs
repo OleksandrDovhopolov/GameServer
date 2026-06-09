@@ -36,6 +36,25 @@ public sealed class AdminConfigsController : ControllerBase
         };
     }
 
+    [HttpGet("{name}/versions/{version:long}")]
+    public async Task<IActionResult> GetConfigVersion(
+        [FromRoute] string name,
+        [FromRoute] long version,
+        [FromQuery] string environment,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(environment))
+            return BadRequest("'environment' query parameter is required.");
+
+        var result = await _configService.GetAdminConfigVersionAsync(name, environment, version, cancellationToken);
+        return result.Status switch
+        {
+            ConfigOperationStatus.Success => Ok(result.Config!),
+            ConfigOperationStatus.NotFound => NotFound(),
+            _ => throw new InvalidOperationException($"Unsupported admin version get status: {result.Status}.")
+        };
+    }
+
     [HttpPut("{name}")]
     public async Task<IActionResult> Publish(
         [FromRoute] string name,

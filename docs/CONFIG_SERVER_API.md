@@ -133,10 +133,24 @@ Content-Type: application/json
 ]
 ```
 
-### 3.4 `POST /admin/configs/{name}/rollback?environment=dev&to=12`
+### 3.4 `GET /admin/configs/{name}/versions/{version}?environment=dev`
+Возвращает содержимое конкретной версии в том же формате, что и `GET /admin/configs/{name}`,
+но без чтения current-версии.
+
+**Response `200`:**
+```json
+{ "name": "books", "environment": "dev", "version": 12, "etag": "99ff00", "json": [ /* ...массив конфигов... */ ] }
+```
+
+**Response `404`:** версии с таким `version` нет в указанном `environment`.
+
+Использование: lazy-load одной исторической версии для diff/view из editor UI, чтобы не тянуть
+полные snapshot-ы всех версий через `/history`.
+
+### 3.5 `POST /admin/configs/{name}/rollback?environment=dev&to=12`
 Создаёт **новую** версию (14), идентичную версии 12 (не удаляет историю). Возвращает как 3.1.
 
-### 3.5 Promote dev → prod
+### 3.6 Promote dev → prod
 Вариант реализации (на выбор): отдельный `POST /admin/configs/{name}/promote?from=dev&to=prod`,
 либо обычный `PUT` в `environment=prod`. Прод-публикация — с явным подтверждением на клиенте.
 
@@ -221,6 +235,7 @@ configs(
 - [ ] `GET /admin/configs/{name}` (с version+etag), auth.
 - [ ] `PUT /admin/configs/{name}` с `If-Match` → `200` / `412`, инкремент version, новый etag, запись аудита.
 - [ ] `GET /admin/configs/{name}/history`.
+- [ ] `GET /admin/configs/{name}/versions/{version}`.
 - [ ] `POST /admin/configs/{name}/rollback?to=`.
 - [ ] Окружения dev/(staging)/prod + способ выбора окружения клиентом (согласовать).
 - [ ] Auth для `/admin/*` (роли editor/publisher), аудит updated_by/at/comment.

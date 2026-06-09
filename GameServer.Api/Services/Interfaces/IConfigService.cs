@@ -11,6 +11,8 @@ public interface IConfigService
 
     Task<AdminConfigOperationResult> GetAdminConfigAsync(string name, string environment, CancellationToken cancellationToken);
 
+    Task<AdminConfigOperationResult> GetAdminConfigVersionAsync(string name, string environment, long version, CancellationToken cancellationToken);
+
     Task<ConfigHistoryEntryDto[]> GetHistoryAsync(string name, string environment, CancellationToken cancellationToken);
 
     Task<AdminConfigOperationResult> PublishAsync(string name, string environment, JsonElement json, string ifMatch, string updatedBy, string? comment, CancellationToken cancellationToken);

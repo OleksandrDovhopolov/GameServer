@@ -82,6 +82,31 @@ public sealed class ConfigServiceTests
     }
 
     [Fact]
+    public async Task GetAdminConfigVersionAsync_WhenVersionExists_ReturnsRequestedVersion()
+    {
+        var repo = new InMemoryConfigRepository();
+        await repo.AppendSeedAsync(MakeRecord("books", "dev", 1, "etag-1"));
+        await repo.AppendSeedAsync(MakeRecord("books", "dev", 2, "etag-2"));
+        var service = new ConfigService(repo);
+
+        var result = await service.GetAdminConfigVersionAsync("books", "dev", 1, default);
+
+        Assert.Equal(ConfigOperationStatus.Success, result.Status);
+        Assert.Equal(1, result.Config!.Version);
+        Assert.Equal("etag-1", result.Config.Etag);
+    }
+
+    [Fact]
+    public async Task GetAdminConfigVersionAsync_WhenVersionMissing_ReturnsNotFound()
+    {
+        var service = new ConfigService(new InMemoryConfigRepository());
+
+        var result = await service.GetAdminConfigVersionAsync("books", "dev", 42, default);
+
+        Assert.Equal(ConfigOperationStatus.NotFound, result.Status);
+    }
+
+    [Fact]
     public async Task PublishAsync_WhenNoExistingVersion_CreatesVersionOne()
     {
         var service = new ConfigService(new InMemoryConfigRepository());
