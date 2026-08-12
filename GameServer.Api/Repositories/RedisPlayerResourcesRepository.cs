@@ -19,8 +19,8 @@ public sealed class RedisPlayerResourcesRepository : IPlayerResourcesRepository
     {
         ct.ThrowIfCancellationRequested();
 
-        var resourcesTask = _database.StringGetAsync(GetResourcesKey(playerId));
-        var versionTask = _database.StringGetAsync(GetResourcesVersionKey(playerId));
+        var resourcesTask = _database.StringGetAsync(PlayerSaveRedisKeys.Resources(playerId));
+        var versionTask = _database.StringGetAsync(PlayerSaveRedisKeys.ResourcesVersion(playerId));
         await Task.WhenAll(resourcesTask, versionTask).WaitAsync(ct);
 
         var resourcesValue = resourcesTask.Result;
@@ -53,8 +53,8 @@ public sealed class RedisPlayerResourcesRepository : IPlayerResourcesRepository
     {
         ct.ThrowIfCancellationRequested();
         var transaction = _database.CreateTransaction();
-        _ = transaction.StringSetAsync(GetResourcesKey(record.PlayerId), JsonSerializer.Serialize(record.Resources));
-        _ = transaction.StringSetAsync(GetResourcesVersionKey(record.PlayerId), record.Version.ToString(CultureInfo.InvariantCulture));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Resources(record.PlayerId), JsonSerializer.Serialize(record.Resources));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.ResourcesVersion(record.PlayerId), record.Version.ToString(CultureInfo.InvariantCulture));
 
         var committed = await transaction.ExecuteAsync().WaitAsync(ct);
         if (!committed)
@@ -62,9 +62,6 @@ public sealed class RedisPlayerResourcesRepository : IPlayerResourcesRepository
             throw new InvalidOperationException($"Redis transaction failed while saving player resources for '{record.PlayerId}'.");
         }
     }
-
-    private static RedisKey GetResourcesKey(string playerId) => $"save:{playerId}:resources";
-    private static RedisKey GetResourcesVersionKey(string playerId) => $"save:{playerId}:resources:version";
 
     private static long TryParseLong(RedisValue value)
     {

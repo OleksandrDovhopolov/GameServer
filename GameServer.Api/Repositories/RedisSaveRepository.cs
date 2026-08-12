@@ -21,8 +21,8 @@ public sealed class RedisSaveRepository : ISaveRepository
         var lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var transaction = _database.CreateTransaction();
 
-        _ = transaction.StringSetAsync(GetSaveKey(playerId), data);
-        _ = transaction.StringSetAsync(GetMetaKey(playerId), lastModified.ToString(CultureInfo.InvariantCulture));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Save(playerId), data);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Meta(playerId), lastModified.ToString(CultureInfo.InvariantCulture));
 
         var committed = await transaction.ExecuteAsync().WaitAsync(cancellationToken);
         if (!committed)
@@ -35,8 +35,8 @@ public sealed class RedisSaveRepository : ISaveRepository
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var dataTask = _database.StringGetAsync(GetSaveKey(playerId));
-        var metaTask = _database.StringGetAsync(GetMetaKey(playerId));
+        var dataTask = _database.StringGetAsync(PlayerSaveRedisKeys.Save(playerId));
+        var metaTask = _database.StringGetAsync(PlayerSaveRedisKeys.Meta(playerId));
         await Task.WhenAll(dataTask, metaTask).WaitAsync(cancellationToken);
 
         var data = dataTask.Result;
@@ -63,7 +63,7 @@ public sealed class RedisSaveRepository : ISaveRepository
             return null;
         }
 
-        var meta = await _database.StringGetAsync(GetMetaKey(playerId)).WaitAsync(cancellationToken);
+        var meta = await _database.StringGetAsync(PlayerSaveRedisKeys.Meta(playerId)).WaitAsync(cancellationToken);
         return meta.IsNull ? 0L : TryParseLastModified(meta);
     }
 
@@ -72,27 +72,20 @@ public sealed class RedisSaveRepository : ISaveRepository
         cancellationToken.ThrowIfCancellationRequested();
 
         var transaction = _database.CreateTransaction();
-        _ = transaction.KeyDeleteAsync(GetSaveKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetMetaKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetResourcesKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetResourcesVersionKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetInventoryKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetInventoryVersionKey(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.Save(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.Meta(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.Resources(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.ResourcesVersion(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.Inventory(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.InventoryVersion(playerId));
         _ = await transaction.ExecuteAsync().WaitAsync(cancellationToken);
     }
 
     public Task<bool> ExistsAsync(string playerId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return _database.KeyExistsAsync(GetSaveKey(playerId)).WaitAsync(cancellationToken);
+        return _database.KeyExistsAsync(PlayerSaveRedisKeys.Save(playerId)).WaitAsync(cancellationToken);
     }
-
-    private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}:{playerId}";
-    private static RedisKey GetMetaKey(string playerId) => $"save:{playerId}:meta";
-    private static RedisKey GetResourcesKey(string playerId) => $"save:{playerId}:resources";
-    private static RedisKey GetResourcesVersionKey(string playerId) => $"save:{playerId}:resources:version";
-    private static RedisKey GetInventoryKey(string playerId) => $"save:{playerId}:inventory";
-    private static RedisKey GetInventoryVersionKey(string playerId) => $"save:{playerId}:inventory:version";
 
     private static long TryParseLastModified(RedisValue rawValue)
     {

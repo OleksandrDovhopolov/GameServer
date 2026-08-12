@@ -42,6 +42,7 @@ builder.Services.AddScoped<IPackSelectionStrategy, PackSelectionStrategy>();
 builder.Services.AddScoped<IPackService, PackService>();
 builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
 builder.Services.Configure<PostgresOptions>(builder.Configuration.GetSection(PostgresOptions.SectionName));
+builder.Services.Configure<SaveStorageOptions>(builder.Configuration.GetSection(SaveStorageOptions.SectionName));
 builder.Services.Configure<AdminToolsOptions>(builder.Configuration.GetSection(AdminToolsOptions.SectionName));
 builder.Services.Configure<GooglePlayBillingOptions>(builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName));
 
@@ -69,10 +70,18 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 
     return ConnectionMultiplexer.Connect(redisOptions.ConnectionString);
 });
-builder.Services.AddScoped<ISaveRepository, RedisSaveRepository>();
-builder.Services.AddScoped<IPlayerAggregateRepository, RedisPlayerAggregateRepository>();
-builder.Services.AddScoped<IPlayerResourcesRepository, RedisPlayerResourcesRepository>();
-builder.Services.AddScoped<IPlayerInventoryRepository, RedisPlayerInventoryRepository>();
+builder.Services.AddScoped<RedisSaveRepository>();
+builder.Services.AddScoped<RedisPlayerAggregateRepository>();
+builder.Services.AddScoped<RedisPlayerResourcesRepository>();
+builder.Services.AddScoped<RedisPlayerInventoryRepository>();
+builder.Services.AddScoped<PostgresSaveRepository>();
+builder.Services.AddScoped<PostgresPlayerAggregateRepository>();
+builder.Services.AddScoped<PostgresPlayerResourcesRepository>();
+builder.Services.AddScoped<PostgresPlayerInventoryRepository>();
+builder.Services.AddScoped<ISaveRepository>(ResolveSaveRepository);
+builder.Services.AddScoped<IPlayerAggregateRepository>(ResolvePlayerAggregateRepository);
+builder.Services.AddScoped<IPlayerResourcesRepository>(ResolvePlayerResourcesRepository);
+builder.Services.AddScoped<IPlayerInventoryRepository>(ResolvePlayerInventoryRepository);
 builder.Services.AddScoped<IGameSaveAssembler, GameSaveAssembler>();
 builder.Services.AddScoped<ISaveService, SaveService>();
 builder.Services.AddScoped<IResourceAdjustmentService, ResourceAdjustmentService>();
@@ -89,6 +98,7 @@ builder.Services.AddScoped<IRewardIntentService, RewardIntentService>();
 builder.Services.AddScoped<IDistributedLockService, RedisDistributedLockService>();
 builder.Services.AddScoped<IRedisAdminClient, RedisAdminClient>();
 builder.Services.AddScoped<IAdminMaintenanceService, AdminMaintenanceService>();
+builder.Services.AddScoped<ISaveStorageBackfillService, SaveStorageBackfillService>();
 builder.Services.AddScoped<IBattlePassSeasonRepository, RedisBattlePassSeasonRepository>();
 builder.Services.AddScoped<IBattlePassStateRepository, RedisBattlePassStateRepository>();
 builder.Services.AddScoped<IEntitlementRepository, RedisEntitlementRepository>();
@@ -127,6 +137,10 @@ app.Logger.LogInformation(
     googlePlayBillingOptions.ApplicationName,
     googlePlayBillingOptions.HttpTimeoutSeconds,
     googlePlayBillingOptions.Enabled ? nameof(GooglePlayPurchaseVerifier) : nameof(StubGooglePlayPurchaseVerifier));
+
+app.Logger.LogInformation(
+    "Save storage provider startup state. Provider: {Provider}",
+    app.Services.GetRequiredService<IOptions<SaveStorageOptions>>().Value.Provider);
 
 // Force reward catalog initialization at startup so invalid configuration fails fast.
 app.Services.GetRequiredService<IWheelRewardCatalog>();
@@ -188,4 +202,88 @@ static void LogGooglePlayBillingConfigurationState(IWebHostEnvironment environme
         !string.IsNullOrWhiteSpace(options.PackageName),
         options.ServiceAccountJson?.Length ?? 0,
         options.ServiceAccountKeyFile?.Length ?? 0);
+}
+
+static ISaveRepository ResolveSaveRepository(IServiceProvider serviceProvider)
+{
+    var provider = serviceProvider.GetRequiredService<IOptions<SaveStorageOptions>>().Value.Provider;
+    var redis = serviceProvider.GetRequiredService<RedisSaveRepository>();
+    var postgres = serviceProvider.GetRequiredService<PostgresSaveRepository>();
+    return provider switch
+    {
+        SaveStorageProvider.Redis => redis,
+        SaveStorageProvider.Postgres => postgres,
+        SaveStorageProvider.DualWriteReadRedis => new DualWriteSaveRepository(
+            redis,
+            postgres,
+            serviceProvider.GetRequiredService<ILogger<DualWriteSaveRepository>>()),
+        SaveStorageProvider.DualWriteReadPostgres => new DualWriteSaveRepository(
+            postgres,
+            redis,
+            serviceProvider.GetRequiredService<ILogger<DualWriteSaveRepository>>()),
+        _ => throw new InvalidOperationException($"Unsupported save storage provider '{provider}'.")
+    };
+}
+
+static IPlayerAggregateRepository ResolvePlayerAggregateRepository(IServiceProvider serviceProvider)
+{
+    var provider = serviceProvider.GetRequiredService<IOptions<SaveStorageOptions>>().Value.Provider;
+    var redis = serviceProvider.GetRequiredService<RedisPlayerAggregateRepository>();
+    var postgres = serviceProvider.GetRequiredService<PostgresPlayerAggregateRepository>();
+    return provider switch
+    {
+        SaveStorageProvider.Redis => redis,
+        SaveStorageProvider.Postgres => postgres,
+        SaveStorageProvider.DualWriteReadRedis => new DualWritePlayerAggregateRepository(
+            redis,
+            postgres,
+            serviceProvider.GetRequiredService<ILogger<DualWritePlayerAggregateRepository>>()),
+        SaveStorageProvider.DualWriteReadPostgres => new DualWritePlayerAggregateRepository(
+            postgres,
+            redis,
+            serviceProvider.GetRequiredService<ILogger<DualWritePlayerAggregateRepository>>()),
+        _ => throw new InvalidOperationException($"Unsupported save storage provider '{provider}'.")
+    };
+}
+
+static IPlayerResourcesRepository ResolvePlayerResourcesRepository(IServiceProvider serviceProvider)
+{
+    var provider = serviceProvider.GetRequiredService<IOptions<SaveStorageOptions>>().Value.Provider;
+    var redis = serviceProvider.GetRequiredService<RedisPlayerResourcesRepository>();
+    var postgres = serviceProvider.GetRequiredService<PostgresPlayerResourcesRepository>();
+    return provider switch
+    {
+        SaveStorageProvider.Redis => redis,
+        SaveStorageProvider.Postgres => postgres,
+        SaveStorageProvider.DualWriteReadRedis => new DualWritePlayerResourcesRepository(
+            redis,
+            postgres,
+            serviceProvider.GetRequiredService<ILogger<DualWritePlayerResourcesRepository>>()),
+        SaveStorageProvider.DualWriteReadPostgres => new DualWritePlayerResourcesRepository(
+            postgres,
+            redis,
+            serviceProvider.GetRequiredService<ILogger<DualWritePlayerResourcesRepository>>()),
+        _ => throw new InvalidOperationException($"Unsupported save storage provider '{provider}'.")
+    };
+}
+
+static IPlayerInventoryRepository ResolvePlayerInventoryRepository(IServiceProvider serviceProvider)
+{
+    var provider = serviceProvider.GetRequiredService<IOptions<SaveStorageOptions>>().Value.Provider;
+    var redis = serviceProvider.GetRequiredService<RedisPlayerInventoryRepository>();
+    var postgres = serviceProvider.GetRequiredService<PostgresPlayerInventoryRepository>();
+    return provider switch
+    {
+        SaveStorageProvider.Redis => redis,
+        SaveStorageProvider.Postgres => postgres,
+        SaveStorageProvider.DualWriteReadRedis => new DualWritePlayerInventoryRepository(
+            redis,
+            postgres,
+            serviceProvider.GetRequiredService<ILogger<DualWritePlayerInventoryRepository>>()),
+        SaveStorageProvider.DualWriteReadPostgres => new DualWritePlayerInventoryRepository(
+            postgres,
+            redis,
+            serviceProvider.GetRequiredService<ILogger<DualWritePlayerInventoryRepository>>()),
+        _ => throw new InvalidOperationException($"Unsupported save storage provider '{provider}'.")
+    };
 }

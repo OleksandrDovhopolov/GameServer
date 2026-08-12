@@ -36,12 +36,12 @@ public sealed class RedisPlayerAggregateRepository : IPlayerAggregateRepository
     {
         ct.ThrowIfCancellationRequested();
 
-        var blobKey = GetSaveKey(playerId);
-        var metaKey = GetMetaKey(playerId);
-        var resourcesKey = GetResourcesKey(playerId);
-        var resourcesVersionKey = GetResourcesVersionKey(playerId);
-        var inventoryKey = GetInventoryKey(playerId);
-        var inventoryVersionKey = GetInventoryVersionKey(playerId);
+        var blobKey = PlayerSaveRedisKeys.Save(playerId);
+        var metaKey = PlayerSaveRedisKeys.Meta(playerId);
+        var resourcesKey = PlayerSaveRedisKeys.Resources(playerId);
+        var resourcesVersionKey = PlayerSaveRedisKeys.ResourcesVersion(playerId);
+        var inventoryKey = PlayerSaveRedisKeys.Inventory(playerId);
+        var inventoryVersionKey = PlayerSaveRedisKeys.InventoryVersion(playerId);
 
         var blobTask = _database.StringGetAsync(blobKey);
         var metaTask = _database.StringGetAsync(metaKey);
@@ -93,16 +93,16 @@ public sealed class RedisPlayerAggregateRepository : IPlayerAggregateRepository
         SanitizeBlobRoot(blobRoot);
         var blobPayload = blobRoot.ToJsonString();
 
-        var resourcesVersion = await GetNextVersionAsync(GetResourcesVersionKey(player.PlayerId), ct);
-        var inventoryVersion = await GetNextVersionAsync(GetInventoryVersionKey(player.PlayerId), ct);
+        var resourcesVersion = await GetNextVersionAsync(PlayerSaveRedisKeys.ResourcesVersion(player.PlayerId), ct);
+        var inventoryVersion = await GetNextVersionAsync(PlayerSaveRedisKeys.InventoryVersion(player.PlayerId), ct);
 
         var transaction = _database.CreateTransaction();
-        _ = transaction.StringSetAsync(GetSaveKey(player.PlayerId), blobPayload);
-        _ = transaction.StringSetAsync(GetMetaKey(player.PlayerId), now.ToString(CultureInfo.InvariantCulture));
-        _ = transaction.StringSetAsync(GetResourcesKey(player.PlayerId), JsonSerializer.Serialize(player.Resources));
-        _ = transaction.StringSetAsync(GetResourcesVersionKey(player.PlayerId), resourcesVersion.ToString(CultureInfo.InvariantCulture));
-        _ = transaction.StringSetAsync(GetInventoryKey(player.PlayerId), JsonSerializer.Serialize(player.InventoryItems));
-        _ = transaction.StringSetAsync(GetInventoryVersionKey(player.PlayerId), inventoryVersion.ToString(CultureInfo.InvariantCulture));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Save(player.PlayerId), blobPayload);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Meta(player.PlayerId), now.ToString(CultureInfo.InvariantCulture));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Resources(player.PlayerId), JsonSerializer.Serialize(player.Resources));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.ResourcesVersion(player.PlayerId), resourcesVersion.ToString(CultureInfo.InvariantCulture));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Inventory(player.PlayerId), JsonSerializer.Serialize(player.InventoryItems));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.InventoryVersion(player.PlayerId), inventoryVersion.ToString(CultureInfo.InvariantCulture));
 
         var committed = await transaction.ExecuteAsync().WaitAsync(ct);
         if (!committed)
@@ -118,12 +118,12 @@ public sealed class RedisPlayerAggregateRepository : IPlayerAggregateRepository
         ct.ThrowIfCancellationRequested();
 
         var transaction = _database.CreateTransaction();
-        _ = transaction.KeyDeleteAsync(GetSaveKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetMetaKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetResourcesKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetResourcesVersionKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetInventoryKey(playerId));
-        _ = transaction.KeyDeleteAsync(GetInventoryVersionKey(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.Save(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.Meta(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.Resources(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.ResourcesVersion(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.Inventory(playerId));
+        _ = transaction.KeyDeleteAsync(PlayerSaveRedisKeys.InventoryVersion(playerId));
         _ = await transaction.ExecuteAsync().WaitAsync(ct);
     }
 
@@ -185,10 +185,4 @@ public sealed class RedisPlayerAggregateRepository : IPlayerAggregateRepository
         return long.TryParse(rawValue, NumberStyles.None, CultureInfo.InvariantCulture, out var value) ? value : fallback;
     }
 
-    private static RedisKey GetSaveKey(string playerId) => $"save:{playerId}:{playerId}";
-    private static RedisKey GetMetaKey(string playerId) => $"save:{playerId}:meta";
-    private static RedisKey GetResourcesKey(string playerId) => $"save:{playerId}:resources";
-    private static RedisKey GetResourcesVersionKey(string playerId) => $"save:{playerId}:resources:version";
-    private static RedisKey GetInventoryKey(string playerId) => $"save:{playerId}:inventory";
-    private static RedisKey GetInventoryVersionKey(string playerId) => $"save:{playerId}:inventory:version";
 }
