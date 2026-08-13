@@ -1,3 +1,5 @@
+using System.Text;
+using System.Threading.RateLimiting;
 using GameServer.Api.Services;
 using GameServer.Api.Services.Interfaces;
 using GameServer.Api.Configuration;
@@ -7,15 +9,20 @@ using GameServer.Api.Filters;
 using GameServer.Api.Swagger;
 using Dapper;
 using Npgsql;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<PlayerScopeFilter>();
+});
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -27,6 +34,15 @@ builder.Services.AddSwaggerGen(options =>
         Scheme = "basic",
         In = ParameterLocation.Header,
         Description = "Basic Authentication header. Format: Basic base64(username:password)"
+    });
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Bearer JWT header. Format: Bearer {token}"
     });
     options.OperationFilter<AdminBasicAuthOperationFilter>();
 });
@@ -45,10 +61,53 @@ builder.Services.Configure<PostgresOptions>(builder.Configuration.GetSection(Pos
 builder.Services.Configure<SaveStorageOptions>(builder.Configuration.GetSection(SaveStorageOptions.SectionName));
 builder.Services.Configure<AdminToolsOptions>(builder.Configuration.GetSection(AdminToolsOptions.SectionName));
 builder.Services.Configure<GooglePlayBillingOptions>(builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName));
+builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
 
 var googlePlayBillingOptions = builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName).Get<GooglePlayBillingOptions>() ?? new GooglePlayBillingOptions();
+var authOptions = builder.Configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
 LogGooglePlayBillingConfigurationState(builder.Environment, googlePlayBillingOptions);
 ValidateGooglePlayBillingConfiguration(builder.Environment, googlePlayBillingOptions);
+ValidateAuthConfiguration(authOptions);
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = authOptions.Issuer,
+            ValidateAudience = false,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(GetJwtValidationKey(authOptions))),
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth-anonymous", context => RateLimitPartition.GetFixedWindowLimiter(
+        GetClientPartitionKey(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = Math.Max(1, authOptions.AnonymousLimitPerMinute),
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+    options.AddPolicy("auth-refresh", context => RateLimitPartition.GetFixedWindowLimiter(
+        GetClientPartitionKey(context),
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = Math.Max(1, authOptions.RefreshLimitPerMinute),
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        }));
+});
 
 builder.Services.AddSingleton(sp =>
 {
@@ -59,6 +118,10 @@ builder.Services.AddSingleton(sp =>
 });
 builder.Services.AddScoped<IConfigRepository, PostgresConfigRepository>();
 builder.Services.AddScoped<IConfigService, ConfigService>();
+builder.Services.AddScoped<IPlayerAccountRepository, PostgresPlayerAccountRepository>();
+builder.Services.AddScoped<IRefreshTokenRepository, PostgresRefreshTokenRepository>();
+builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddSingleton<IConnectionMultiplexer>(serviceProvider =>
 {
@@ -121,6 +184,7 @@ else
 }
 builder.Services.Configure<AdminAuthOptions>(builder.Configuration.GetSection("AdminAuth"));
 builder.Services.AddScoped<AdminBasicAuthFilter>();
+builder.Services.AddScoped<PlayerScopeFilter>();
 builder.Services.AddSingleton<IRandomGenerator, RandomGenerator>();
 builder.Services.AddSingleton<ISystemClock, SystemClock>();
 builder.Services.AddSingleton<IWheelRewardCatalog, WheelRewardCatalog>();
@@ -141,6 +205,12 @@ app.Logger.LogInformation(
 app.Logger.LogInformation(
     "Save storage provider startup state. Provider: {Provider}",
     app.Services.GetRequiredService<IOptions<SaveStorageOptions>>().Value.Provider);
+app.Logger.LogInformation(
+    "Auth startup state. Mode: {Mode}, Issuer: {Issuer}, KeyId: {KeyId}, JwtSigningKeySet: {JwtSigningKeySet}",
+    authOptions.Mode,
+    authOptions.Issuer,
+    authOptions.KeyId,
+    !string.IsNullOrWhiteSpace(authOptions.JwtSigningKey));
 
 // Force reward catalog initialization at startup so invalid configuration fails fast.
 app.Services.GetRequiredService<IWheelRewardCatalog>();
@@ -155,6 +225,10 @@ if (!app.Environment.IsDevelopment())
 app.UseSwagger();
 app.UseSwaggerUI();
 app.UseHttpLogging();
+app.UseRouting();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 
@@ -191,6 +265,45 @@ static void ValidateGooglePlayBillingConfiguration(IWebHostEnvironment environme
     {
         throw new InvalidOperationException($"GooglePlayBilling:ServiceAccountKeyFile was not found at '{options.ServiceAccountKeyFile}'.");
     }
+}
+
+static void ValidateAuthConfiguration(AuthOptions options)
+{
+    if (options.Mode == AuthMode.Disabled)
+    {
+        return;
+    }
+
+    if (string.IsNullOrWhiteSpace(options.JwtSigningKey))
+    {
+        throw new InvalidOperationException("Auth:JwtSigningKey is not configured.");
+    }
+
+    if (Encoding.UTF8.GetByteCount(options.JwtSigningKey) < 32)
+    {
+        throw new InvalidOperationException("Auth:JwtSigningKey must be at least 32 bytes for HS256.");
+    }
+}
+
+static string GetJwtValidationKey(AuthOptions options)
+{
+    return string.IsNullOrWhiteSpace(options.JwtSigningKey)
+        ? "GameServer.DisabledAuth.Placeholder.OnlyForStartup.32Bytes"
+        : options.JwtSigningKey;
+}
+
+static string GetClientPartitionKey(HttpContext context)
+{
+    if (context.Request.Headers.TryGetValue("X-Forwarded-For", out var forwardedFor))
+    {
+        var first = forwardedFor.ToString().Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(first))
+        {
+            return first;
+        }
+    }
+
+    return context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 }
 
 static void LogGooglePlayBillingConfigurationState(IWebHostEnvironment environment, GooglePlayBillingOptions options)

@@ -11,6 +11,7 @@
         <PackageReference Include="Dapper" Version="2.1.72" />
         <PackageReference Include="Google.Apis.AndroidPublisher.v3" Version="1.73.0.4094" />
         <PackageReference Include="MassTransit.RabbitMQ" Version="9.2.0-develop.109" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
         <PackageReference Include="Npgsql" Version="10.0.2" />
         <PackageReference Include="StackExchange.Redis" Version="3.0.2-preview" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
