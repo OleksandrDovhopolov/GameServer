@@ -85,3 +85,48 @@ SRV-2 и SRV-3 — до `Required`.
     осознанно.
   - Зафиксировать оба кода в контракте для клиента до того, как появится кнопка «войти через
     Google».
+
+---
+
+## ⚡ Производительность
+
+- [ ] **SRV-6. Один `POST /save/global` делает лишние обращения к базе.**
+  Сейчас на одно сохранение приходится до четырёх round-trip'ов там, где достаточно двух:
+  1. [SaveService.cs:46](../GameServer.Api/Services/SaveService.cs) → `ApplyWheelSaveGuardsAsync` →
+     [:119](../GameServer.Api/Services/SaveService.cs) `_saveRepository.LoadAsync` — читает
+     `root_document` и `last_modified`;
+  2. [SaveService.cs:53](../GameServer.Api/Services/SaveService.cs)
+     `_playerAggregateRepository.LoadAsync` — читает **тот же** `root_document` плюс
+     `resources` / `inventory` и их версии;
+  3. внутри этого же `LoadAsync` — ещё одна запись, если у игрока отсутствует блоб, resources
+     или inventory (материализация дефолтов);
+  4. [SaveService.cs:55](../GameServer.Api/Services/SaveService.cs)
+     `_playerAggregateRepository.SaveAsync` — собственно запись.
+
+  На `DualWriteRead*` каждая запись уходит ещё и в зеркало, то есть цена удваивается.
+
+  Внутри приватной сети Railway это единицы миллисекунд и незаметно. Но стоимость каждого
+  round-trip'а линейно растёт с расстоянием до игрока: при релизе в Азию из `europe-west4`
+  один океан на запрос превращается в четыре. Сокращение обращений помогает **всем** регионам
+  сразу и не требует ни мульти-региона, ни переноса базы.
+
+  Что сделать:
+  - Загружать аггрегат **один раз** и передавать `aggregate.RootDocument` в
+    `ApplyWheelSaveGuardsAsync` вместо отдельного `_saveRepository.LoadAsync`. Гард смотрит
+    только на секцию `FortuneWheel`, а `SanitizeBlobRoot`
+    ([SaveService.cs:348](../GameServer.Api/Services/SaveService.cs)) вырезает лишь
+    `Resources` / `Inventory` / `InventoryItems` / `ServerRewards` — то есть санированный корень
+    для гарда эквивалентен сырому блобу. Проверить это утверждение тестом перед правкой.
+  - Заодно `DeleteAsync` ([SaveService.cs:72](../GameServer.Api/Services/SaveService.cs)): сейчас
+    `ExistsAsync` и следом `DeleteAsync` — два запроса там, где хватит одного `DELETE` с проверкой
+    числа затронутых строк.
+  - Не менять наблюдаемое поведение: `404` на удаление несуществующего сейва и материализация
+    дефолтов при первом обращении должны остаться как есть — контрактные изменения идут
+    отдельной задачей.
+  - Тесты `SaveServiceTests` должны остаться зелёными без правок; добавить проверку, что
+    сохранение существующего игрока делает ровно одно чтение аггрегата.
+
+  **Делать до релиза в удалённые регионы.** Парная задача на клиенте (её здесь нет, она в
+  репозитории игры): протянуть `RequestTimeoutMs` и `RetryCount` из `SaveBackendConfig` в команды
+  — сейчас `HttpSaveStorage` их не передаёт, и на длинных международных маршрутах с потерями
+  пакетов сохранение будет молча отваливаться в локальный кэш.
