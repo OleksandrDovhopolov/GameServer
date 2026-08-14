@@ -46,8 +46,8 @@ public sealed class AuthService : IAuthService
             return await ClaimLegacyAsync(normalizedLegacyPlayerId, ct);
         }
 
-        var playerId = Guid.NewGuid().ToString("D");
-        var subject = Guid.NewGuid().ToString("D");
+        var playerId = Guid.NewGuid().ToString("N");
+        var subject = Guid.NewGuid().ToString("N");
         var created = await _accounts.CreateWithIdentityAsync(playerId, AuthProviders.Anonymous, subject, ct);
         if (!created)
         {
@@ -130,7 +130,7 @@ public sealed class AuthService : IAuthService
             return AuthResult.Fail(AuthErrorCodes.ValidationError, "Legacy player id must be a GUID.");
         }
 
-        var playerId = parsed.ToString("D");
+        var playerId = parsed.ToString("N");
         var existing = await _accounts.GetByIdentityAsync(AuthProviders.Legacy, playerId, ct);
         if (existing is not null)
         {

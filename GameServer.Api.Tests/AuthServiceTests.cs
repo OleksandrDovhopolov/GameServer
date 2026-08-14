@@ -23,6 +23,7 @@ public sealed class AuthServiceTests
         Assert.True(result.Success);
         Assert.NotNull(result.Tokens);
         Assert.True(accounts.HasPlayer(result.Tokens!.PlayerId));
+        Assert.DoesNotContain("-", result.Tokens.PlayerId, StringComparison.Ordinal);
         Assert.True(accounts.HasIdentity(AuthProviders.Anonymous, result.Tokens.PlayerId) ||
                     accounts.IdentitiesForPlayer(result.Tokens.PlayerId).Any(x => x.Provider == AuthProviders.Anonymous));
     }
@@ -32,7 +33,7 @@ public sealed class AuthServiceTests
     {
         var accounts = new InMemoryPlayerAccountRepository();
         var service = CreateService(accounts, new InMemoryRefreshTokenRepository());
-        var legacyPlayerId = Guid.NewGuid().ToString("D");
+        var legacyPlayerId = Guid.NewGuid().ToString("N");
 
         var result = await service.AuthenticateAnonymousAsync(legacyPlayerId, CancellationToken.None);
 
@@ -45,7 +46,7 @@ public sealed class AuthServiceTests
     public async Task Anonymous_WhenLegacyAlreadyClaimed_ReturnsConflictCode()
     {
         var service = CreateService(new InMemoryPlayerAccountRepository(), new InMemoryRefreshTokenRepository());
-        var legacyPlayerId = Guid.NewGuid().ToString("D");
+        var legacyPlayerId = Guid.NewGuid().ToString("N");
 
         var first = await service.AuthenticateAnonymousAsync(legacyPlayerId, CancellationToken.None);
         var second = await service.AuthenticateAnonymousAsync(legacyPlayerId, CancellationToken.None);
@@ -67,7 +68,7 @@ public sealed class AuthServiceTests
                 AllowLegacyClaim = false
             });
 
-        var result = await service.AuthenticateAnonymousAsync(Guid.NewGuid().ToString("D"), CancellationToken.None);
+        var result = await service.AuthenticateAnonymousAsync(Guid.NewGuid().ToString("N"), CancellationToken.None);
 
         Assert.False(result.Success);
         Assert.Equal(AuthErrorCodes.LegacyClaimDisabled, result.ErrorCode);
