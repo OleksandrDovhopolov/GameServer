@@ -63,7 +63,7 @@ docker-compose up
 
 Key `appsettings.json` sections:
 - `Redis:ConnectionString` — defaults to `localhost:6379`
-- `AdminAuth:Username/Password` — defaults `admin/admin`; `AllowedIps` empty = any IP allowed
+- `ADMIN_USER` / `ADMIN_PASS` — required admin API credentials outside Development; `AdminAuth:AllowedIps` empty = any IP allowed
 - `AdminTools:AllowRedisFlush` — must be explicitly enabled for the flush endpoint
 - `GooglePlayBilling:Enabled` — must be `false` in Development or the app throws at startup
 

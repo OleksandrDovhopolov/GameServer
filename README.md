@@ -56,8 +56,8 @@ docker-compose up
 | Key | Default | Notes |
 |---|---|---|
 | `Redis:ConnectionString` | `localhost:6379` | Required |
-| `AdminAuth:Username` | `admin` | Admin API access |
-| `AdminAuth:Password` | `admin` | Admin API access |
+| `ADMIN_USER` | — | Required admin API username outside Development |
+| `ADMIN_PASS` | — | Required admin API password outside Development |
 | `AdminTools:AllowRedisFlush` | `false` | Enable flush endpoint |
 | `GooglePlayBilling:Enabled` | `false` | Must be `false` in Development |
 | `GooglePlayBilling:PackageName` | — | Android application ID |
@@ -74,6 +74,8 @@ GooglePlayBilling__Enabled=true
 GooglePlayBilling__PackageName=<android applicationId>
 GooglePlayBilling__ServiceAccountJson=<full JSON key>
 ```
+
+Store real credentials only in environment variables or Railway variables. Do not commit production admin, database, Redis, JWT, or service-account secrets.
 
 Google Play Console requirements:
 - Add service account under **Users & permissions**

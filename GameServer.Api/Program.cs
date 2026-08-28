@@ -308,7 +308,7 @@ static void ValidateAdminAuthConfiguration(IWebHostEnvironment environment, Admi
     if (string.Equals(username, "admin", StringComparison.Ordinal) &&
         string.Equals(password, "admin", StringComparison.Ordinal))
     {
-        throw new InvalidOperationException("Default admin/admin credentials are not allowed outside Development.");
+        throw new InvalidOperationException("Default admin credentials are not allowed outside Development.");
     }
 }
 
