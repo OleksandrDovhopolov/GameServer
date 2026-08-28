@@ -65,9 +65,11 @@ builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOpt
 
 var googlePlayBillingOptions = builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName).Get<GooglePlayBillingOptions>() ?? new GooglePlayBillingOptions();
 var authOptions = builder.Configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
+var adminAuthOptions = builder.Configuration.GetSection("AdminAuth").Get<AdminAuthOptions>() ?? new AdminAuthOptions();
 LogGooglePlayBillingConfigurationState(builder.Environment, googlePlayBillingOptions);
 ValidateGooglePlayBillingConfiguration(builder.Environment, googlePlayBillingOptions);
 ValidateAuthConfiguration(authOptions);
+ValidateAdminAuthConfiguration(builder.Environment, adminAuthOptions);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -222,8 +224,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
-app.UseSwagger();
-app.UseSwaggerUI();
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 app.UseHttpLogging();
 app.UseRouting();
 app.UseRateLimiter();
@@ -282,6 +287,28 @@ static void ValidateAuthConfiguration(AuthOptions options)
     if (Encoding.UTF8.GetByteCount(options.JwtSigningKey) < 32)
     {
         throw new InvalidOperationException("Auth:JwtSigningKey must be at least 32 bytes for HS256.");
+    }
+}
+
+static void ValidateAdminAuthConfiguration(IWebHostEnvironment environment, AdminAuthOptions options)
+{
+    if (environment.IsDevelopment())
+    {
+        return;
+    }
+
+    var username = Environment.GetEnvironmentVariable("ADMIN_USER") ?? options.Username;
+    var password = Environment.GetEnvironmentVariable("ADMIN_PASS") ?? options.Password;
+
+    if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+    {
+        throw new InvalidOperationException("Admin auth credentials must be configured outside Development.");
+    }
+
+    if (string.Equals(username, "admin", StringComparison.Ordinal) &&
+        string.Equals(password, "admin", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Default admin/admin credentials are not allowed outside Development.");
     }
 }
 
