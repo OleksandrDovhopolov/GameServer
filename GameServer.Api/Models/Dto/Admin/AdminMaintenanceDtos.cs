@@ -5,6 +5,11 @@ public sealed class AdminRedisFlushRequest
     public string Confirm { get; init; } = string.Empty;
 }
 
+public sealed class AdminPlayerSaveResetRequest
+{
+    public string Confirm { get; init; } = string.Empty;
+}
+
 public sealed class AdminMaintenanceOperationResponse
 {
     public bool Success { get; init; }

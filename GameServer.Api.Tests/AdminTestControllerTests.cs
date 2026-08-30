@@ -43,6 +43,59 @@ public sealed class AdminTestControllerTests
         Assert.IsType<BadRequestObjectResult>(result.Result);
     }
 
+    [Fact]
+    public async Task ResetPlayerSave_WhenFeatureDisabled_ReturnsForbidden()
+    {
+        var controller = new AdminTestController(new StubAdminMaintenanceService(new AdminMaintenanceOperationResponse
+        {
+            Success = false,
+            ErrorCode = AdminMaintenanceErrorCodes.FeatureDisabled,
+            ErrorMessage = "disabled"
+        }));
+
+        var result = await controller.ResetPlayerSave("p1", new AdminPlayerSaveResetRequest
+        {
+            Confirm = "RESET_PLAYER_SAVE"
+        }, CancellationToken.None);
+
+        var forbidden = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(403, forbidden.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResetPlayerSave_WhenValidationFails_ReturnsBadRequest()
+    {
+        var controller = new AdminTestController(new StubAdminMaintenanceService(new AdminMaintenanceOperationResponse
+        {
+            Success = false,
+            ErrorCode = AdminMaintenanceErrorCodes.ValidationError,
+            ErrorMessage = "bad"
+        }));
+
+        var result = await controller.ResetPlayerSave("p1", new AdminPlayerSaveResetRequest(), CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result.Result);
+    }
+
+    [Fact]
+    public async Task ResetPlayerSave_WhenResetFails_ReturnsInternalServerError()
+    {
+        var controller = new AdminTestController(new StubAdminMaintenanceService(new AdminMaintenanceOperationResponse
+        {
+            Success = false,
+            ErrorCode = AdminMaintenanceErrorCodes.PlayerSaveResetFailed,
+            ErrorMessage = "failed"
+        }));
+
+        var result = await controller.ResetPlayerSave("p1", new AdminPlayerSaveResetRequest
+        {
+            Confirm = "RESET_PLAYER_SAVE"
+        }, CancellationToken.None);
+
+        var error = Assert.IsType<ObjectResult>(result.Result);
+        Assert.Equal(500, error.StatusCode);
+    }
+
     private sealed class StubAdminMaintenanceService : IAdminMaintenanceService
     {
         private readonly AdminMaintenanceOperationResponse _response;
@@ -53,6 +106,14 @@ public sealed class AdminTestControllerTests
         }
 
         public Task<AdminMaintenanceOperationResponse> FlushRedisAsync(AdminRedisFlushRequest request, CancellationToken ct = default)
+        {
+            return Task.FromResult(_response);
+        }
+
+        public Task<AdminMaintenanceOperationResponse> ResetPlayerSaveAsync(
+            string playerId,
+            AdminPlayerSaveResetRequest request,
+            CancellationToken ct = default)
         {
             return Task.FromResult(_response);
         }

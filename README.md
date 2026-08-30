@@ -59,6 +59,7 @@ docker-compose up
 | `ADMIN_USER` | — | Required admin API username outside Development |
 | `ADMIN_PASS` | — | Required admin API password outside Development |
 | `AdminTools:AllowRedisFlush` | `false` | Enable flush endpoint |
+| `AdminTools:AllowPlayerSaveReset` | `false` | Enable test player save reset endpoint |
 | `GooglePlayBilling:Enabled` | `false` | Must be `false` in Development |
 | `GooglePlayBilling:PackageName` | — | Android application ID |
 | `GooglePlayBilling:ServiceAccountJson` | — | Full JSON key as env variable |
@@ -118,7 +119,14 @@ Google Play Console requirements:
 | PUT | `/battle-pass/seasons/{id}/levels` | Set season levels |
 | POST | `/battle-pass/seasons/{id}/publish` | Publish season |
 | POST | `/entitlements/grant` | Grant premium pass |
+| POST | `/test/player/{id}/save/reset` | Reset player save data (disabled by default) |
 | POST | `/test/redis/flush` | Flush Redis (disabled by default) |
+
+Player save reset requires Basic Auth, `AdminTools:AllowPlayerSaveReset=true`, and body:
+
+```json
+{ "confirm": "RESET_PLAYER_SAVE" }
+```
 
 ## Running Tests
 

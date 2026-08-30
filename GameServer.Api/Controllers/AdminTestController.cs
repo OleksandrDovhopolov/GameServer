@@ -18,6 +18,26 @@ public sealed class AdminTestController : ControllerBase
         _adminMaintenanceService = adminMaintenanceService;
     }
 
+    [HttpPost("player/{id}/save/reset")]
+    public async Task<ActionResult<AdminMaintenanceOperationResponse>> ResetPlayerSave(
+        [FromRoute] string id,
+        [FromBody] AdminPlayerSaveResetRequest request,
+        CancellationToken ct)
+    {
+        var response = await _adminMaintenanceService.ResetPlayerSaveAsync(id, request, ct);
+        if (response.Success)
+        {
+            return Ok(response);
+        }
+
+        return response.ErrorCode switch
+        {
+            AdminMaintenanceErrorCodes.FeatureDisabled => StatusCode(StatusCodes.Status403Forbidden, response),
+            AdminMaintenanceErrorCodes.PlayerSaveResetFailed => StatusCode(StatusCodes.Status500InternalServerError, response),
+            _ => BadRequest(response)
+        };
+    }
+
     [HttpPost("redis/flush")]
     public async Task<ActionResult<AdminMaintenanceOperationResponse>> FlushRedis(
         [FromBody] AdminRedisFlushRequest request,
