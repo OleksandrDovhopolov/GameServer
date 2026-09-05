@@ -53,8 +53,8 @@ public sealed class RedisPlayerResourcesRepository : IPlayerResourcesRepository
     {
         ct.ThrowIfCancellationRequested();
         var transaction = _database.CreateTransaction();
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Resources(record.PlayerId), JsonSerializer.Serialize(record.Resources));
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.ResourcesVersion(record.PlayerId), record.Version.ToString(CultureInfo.InvariantCulture));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Resources(record.PlayerId), JsonSerializer.Serialize(record.Resources), PlayerSaveRedisKeys.Ttl);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.ResourcesVersion(record.PlayerId), record.Version.ToString(CultureInfo.InvariantCulture), PlayerSaveRedisKeys.Ttl);
 
         var committed = await transaction.ExecuteAsync().WaitAsync(ct);
         if (!committed)

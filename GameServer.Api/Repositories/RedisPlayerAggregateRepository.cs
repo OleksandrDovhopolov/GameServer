@@ -97,12 +97,12 @@ public sealed class RedisPlayerAggregateRepository : IPlayerAggregateRepository
         var inventoryVersion = await GetNextVersionAsync(PlayerSaveRedisKeys.InventoryVersion(player.PlayerId), ct);
 
         var transaction = _database.CreateTransaction();
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Save(player.PlayerId), blobPayload);
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Meta(player.PlayerId), now.ToString(CultureInfo.InvariantCulture));
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Resources(player.PlayerId), JsonSerializer.Serialize(player.Resources));
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.ResourcesVersion(player.PlayerId), resourcesVersion.ToString(CultureInfo.InvariantCulture));
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Inventory(player.PlayerId), JsonSerializer.Serialize(player.InventoryItems));
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.InventoryVersion(player.PlayerId), inventoryVersion.ToString(CultureInfo.InvariantCulture));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Save(player.PlayerId), blobPayload, PlayerSaveRedisKeys.Ttl);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Meta(player.PlayerId), now.ToString(CultureInfo.InvariantCulture), PlayerSaveRedisKeys.Ttl);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Resources(player.PlayerId), JsonSerializer.Serialize(player.Resources), PlayerSaveRedisKeys.Ttl);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.ResourcesVersion(player.PlayerId), resourcesVersion.ToString(CultureInfo.InvariantCulture), PlayerSaveRedisKeys.Ttl);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Inventory(player.PlayerId), JsonSerializer.Serialize(player.InventoryItems), PlayerSaveRedisKeys.Ttl);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.InventoryVersion(player.PlayerId), inventoryVersion.ToString(CultureInfo.InvariantCulture), PlayerSaveRedisKeys.Ttl);
 
         var committed = await transaction.ExecuteAsync().WaitAsync(ct);
         if (!committed)

@@ -21,8 +21,8 @@ public sealed class RedisSaveRepository : ISaveRepository
         var lastModified = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var transaction = _database.CreateTransaction();
 
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Save(playerId), data);
-        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Meta(playerId), lastModified.ToString(CultureInfo.InvariantCulture));
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Save(playerId), data, PlayerSaveRedisKeys.Ttl);
+        _ = transaction.StringSetAsync(PlayerSaveRedisKeys.Meta(playerId), lastModified.ToString(CultureInfo.InvariantCulture), PlayerSaveRedisKeys.Ttl);
 
         var committed = await transaction.ExecuteAsync().WaitAsync(cancellationToken);
         if (!committed)

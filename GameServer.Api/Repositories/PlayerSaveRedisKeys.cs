@@ -6,6 +6,7 @@ public static class PlayerSaveRedisKeys
 {
     public const string Prefix = "save:";
     public const string ScanPattern = "save:*";
+    public static readonly TimeSpan Ttl = TimeSpan.FromDays(7);
 
     public static RedisKey Save(string playerId) => $"save:{playerId}:{playerId}";
     public static RedisKey Meta(string playerId) => $"save:{playerId}:meta";
