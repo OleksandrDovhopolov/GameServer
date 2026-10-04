@@ -62,6 +62,7 @@ builder.Services.Configure<SaveStorageOptions>(builder.Configuration.GetSection(
 builder.Services.Configure<AdminToolsOptions>(builder.Configuration.GetSection(AdminToolsOptions.SectionName));
 builder.Services.Configure<GooglePlayBillingOptions>(builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName));
 builder.Services.Configure<AuthOptions>(builder.Configuration.GetSection(AuthOptions.SectionName));
+builder.Services.Configure<KafkaOptions>(builder.Configuration.GetSection(KafkaOptions.SectionName));
 
 var googlePlayBillingOptions = builder.Configuration.GetSection(GooglePlayBillingOptions.SectionName).Get<GooglePlayBillingOptions>() ?? new GooglePlayBillingOptions();
 var authOptions = builder.Configuration.GetSection(AuthOptions.SectionName).Get<AuthOptions>() ?? new AuthOptions();
@@ -191,6 +192,16 @@ builder.Services.AddSingleton<IRandomGenerator, RandomGenerator>();
 builder.Services.AddSingleton<ISystemClock, SystemClock>();
 builder.Services.AddSingleton<IWheelRewardCatalog, WheelRewardCatalog>();
 builder.Services.AddScoped<IWheelService, WheelService>();
+
+var kafkaOptions = builder.Configuration.GetSection(KafkaOptions.SectionName).Get<KafkaOptions>() ?? new KafkaOptions();
+if (kafkaOptions.Enabled)
+{
+    builder.Services.AddSingleton<IGameEventPublisher, KafkaGameEventPublisher>();
+}
+else
+{
+    builder.Services.AddSingleton<IGameEventPublisher, NullGameEventPublisher>();
+}
 
 var app = builder.Build();
 
