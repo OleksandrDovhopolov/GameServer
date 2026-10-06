@@ -1,0 +1,67 @@
+name: gameserver-staging
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: GameServer.Api/Dockerfile
+    env_file:
+      - .env.staging
+    ports:
+      - "5080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Staging
+      ASPNETCORE_URLS: http://+:8080
+      Redis__ConnectionString: redis:6379,abortConnect=false
+      Postgres__ConnectionString: Host=postgres;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      SaveStorage__Provider: Redis
+      AdminAuth__Username: ${ADMIN_USER}
+      AdminAuth__Password: ${ADMIN_PASS}
+      AdminTools__AllowRedisFlush: "false"
+      AdminTools__AllowPlayerSaveReset: "false"
+      Auth__Mode: Disabled
+      Auth__JwtSigningKey: ${AUTH_JWT_SIGNING_KEY}
+      GooglePlayBilling__Enabled: "false"
+      Kafka__Enabled: "false"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    env_file:
+      - .env.staging
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./GameServer.Api/Data/auth_schema.sql:/docker-entrypoint-initdb.d/01-auth_schema.sql:ro
+      - ./GameServer.Api/Data/configs_schema.sql:/docker-entrypoint-initdb.d/02-configs_schema.sql:ro
+      - ./GameServer.Api/Data/player_saves_schema.sql:/docker-entrypoint-initdb.d/03-player_saves_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:

@@ -245,9 +245,9 @@ static void ValidateGooglePlayBillingConfiguration(IWebHostEnvironment environme
 {
     if (!options.Enabled)
     {
-        if (!environment.IsDevelopment())
+        if (!environment.IsDevelopment() && !environment.IsStaging())
         {
-            throw new InvalidOperationException("GooglePlayBilling must be enabled outside Development.");
+            throw new InvalidOperationException("GooglePlayBilling must be enabled outside Development/Staging.");
         }
 
         return;

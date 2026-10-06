@@ -8,6 +8,7 @@ riderModule.iml
 .env
 .env.*
 !.env.example
+!.env.*.example
 *.env
 appsettings.Local.json
 appsettings.*.Local.json
