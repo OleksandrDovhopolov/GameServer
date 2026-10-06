@@ -30,6 +30,21 @@ Expected response:
 pong
 ```
 
+Run the smoke test:
+
+```powershell
+.\scripts\smoke-test.ps1
+```
+
+Expected result:
+
+```text
+[OK] API /ping returned pong
+[OK] Redis returned PONG
+[OK] Postgres returned 1
+Smoke test passed.
+```
+
 ## Services
 
 - API: `http://localhost:5080`
