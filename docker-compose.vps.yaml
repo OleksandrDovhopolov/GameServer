@@ -2,9 +2,8 @@ name: gameserver-vps
 
 services:
   api:
-    build:
-      context: .
-      dockerfile: GameServer.Api/Dockerfile
+    # Built by .github/workflows/build.yml. Roll back with API_TAG=sha-<commit>.
+    image: ghcr.io/oleksandrdovhopolov/gameserver-api:${API_TAG:-staging}
     env_file:
       - .env.vps
     ports:
