@@ -79,6 +79,14 @@ the database may be half-restored, so do not start the API against it.
 4. Bring the API back only after the smoke test passes:
    `docker compose --env-file .env.vps -f docker-compose.vps.yaml start api`
 
+## Verification log
+
+A backup is only proven by a restore. Add a line here after every rehearsal.
+
+| Date | Backup | Result |
+| --- | --- | --- |
+| 2026-10-13 | `20261013-092854` | Dropped all `players` rows and changed a Redis resource value, then restored. All 3 players came back with their original ids; `save:restore-test-player:resources` went back from `{"Gold":1250}` to `{"Gold":250}`. Smoke test passed. |
+
 ## Related
 
 - Deploy and rollback by image tag: `./scripts/deploy-vps.sh [sha-<commit>]`
