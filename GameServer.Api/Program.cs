@@ -16,6 +16,7 @@ using Microsoft.IdentityModel.Tokens;
 using StackExchange.Redis;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.OpenApi.Models;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -242,11 +243,17 @@ if (app.Environment.IsDevelopment())
 }
 app.UseHttpLogging();
 app.UseRouting();
+// After UseRouting so the request count and duration metrics carry the matched route
+// as a label instead of the raw path.
+app.UseHttpMetrics();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Scraped by Prometheus over the internal docker network. nginx must not expose it.
+app.MapMetrics();
 
 app.MapGet("/ping", () => "pong");
 
