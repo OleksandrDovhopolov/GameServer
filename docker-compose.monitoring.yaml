@@ -58,7 +58,11 @@ services:
   postgres-exporter:
     image: quay.io/prometheuscommunity/postgres-exporter:v0.15.0
     environment:
-      DATA_SOURCE_NAME: ${POSTGRES_EXPORTER_DSN}
+      # User and password are passed separately on purpose: inside a postgresql:// URL
+      # a password containing / + @ # or % breaks URL parsing and the exporter fails to connect.
+      DATA_SOURCE_URI: ${POSTGRES_EXPORTER_URI}
+      DATA_SOURCE_USER: ${POSTGRES_EXPORTER_USER}
+      DATA_SOURCE_PASS: ${POSTGRES_EXPORTER_PASS}
     networks: [app]
     restart: unless-stopped
 

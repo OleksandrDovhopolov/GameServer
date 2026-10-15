@@ -108,7 +108,7 @@ does nothing — the password must be changed inside PostgreSQL, then everywhere
 NEW=$(openssl rand -base64 24)
 dc exec -T postgres psql -U gameserver -d gameserver_staging -c "ALTER USER gameserver WITH PASSWORD '$NEW';"
 sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$NEW|" .env.vps
-sed -i "s|postgresql://gameserver:[^@]*@|postgresql://gameserver:$NEW@|" .env.monitoring
+sed -i "s|^POSTGRES_EXPORTER_PASS=.*|POSTGRES_EXPORTER_PASS=$NEW|" .env.monitoring
 dc up -d
 dcm up -d postgres-exporter
 unset NEW
