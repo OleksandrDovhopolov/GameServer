@@ -111,6 +111,33 @@ Prometheus has no public address. Reach it from a workstation with a tunnel, the
 ssh -L 9090:127.0.0.1:9090 deploy@<vps-ip>
 ```
 
+## Alerting
+
+Grafana evaluates the rules and sends notifications to a Telegram bot. The bot token lives in
+Grafana's own database, not in git.
+
+| Rule | Query | Fires when | Pending |
+| --- | --- | --- | --- |
+| API is down | `up{job="gameserver-api"}` | below 1 | 2m |
+| PostgreSQL is down | `pg_up` | below 1 | 2m |
+| Disk almost full | `100 * (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"})` | above 85 | 5m |
+| Memory pressure | `100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)` | above 90 | 10m |
+| High 5xx rate | `100 * (sum(rate(http_requests_received_total{code=~"5.."}[5m])) or vector(0)) / clamp_min(sum(rate(http_requests_received_total[5m])), 0.001)` | above 5 | 5m |
+
+The comparison belongs in the Threshold block, not in the PromQL. With `== 0` or `> 85` inside
+the query, a healthy system returns an empty result and Grafana raises `DatasourceNoData`
+instead of staying quiet. Each rule also sets *no data* to Normal and *execution error* to
+Alerting, so a broken Prometheus is still reported.
+
+The pending period is what keeps a deploy quiet: `deploy-vps.sh` leaves the API down for a few
+seconds, well inside the 2 minutes.
+
+Planned downtime goes through **Alerting → Silences** rather than disabling a rule, which is
+easy to forget to undo.
+
+Threshold rules are tested by lowering the threshold below the current value, waiting for the
+notification, and putting it back — never by actually filling the disk.
+
 ## TLS
 
 Certificates come from Let's Encrypt through certbot, which writes the TLS block into the nginx

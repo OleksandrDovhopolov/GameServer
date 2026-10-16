@@ -86,6 +86,7 @@ A backup is only proven by a restore. Add a line here after every rehearsal.
 | Date | Backup | Result |
 | --- | --- | --- |
 | 2026-10-13 | `20261013-092854` | Dropped all `players` rows and changed a Redis resource value, then restored. All 3 players came back with their original ids; `save:restore-test-player:resources` went back from `{"Gold":1250}` to `{"Gold":250}`. Smoke test passed. |
+| 2026-10-16 | — | Scheduled run confirmed: three consecutive cron backups (14, 15, 16 Oct at 03:30:01) in `~/backup.log`, each with both files. |
 
 ## Related
 
