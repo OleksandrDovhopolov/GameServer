@@ -56,6 +56,22 @@ new login in a second window:
 sudo sshd -t && sudo systemctl reload ssh
 ```
 
+## AWS
+
+Separate account, separate rules. Nothing here shares credentials with the VPS.
+
+- Root is used only for billing changes and closing the account. Day-to-day work goes through an
+  IAM user with MFA.
+- **No long-lived access keys inside AWS.** An application on EC2 gets its permissions from an
+  attached IAM role, and the credentials arrive through the instance metadata service (IMDSv2),
+  rotated automatically and never written to disk. Keys in code or config are for things that run
+  *outside* AWS — for example the VPS, when it starts shipping backups to S3 (OPS-3). That user
+  gets a narrow write-only policy for one bucket, not a ready-made AWS policy.
+- Ready-made policies such as `AmazonS3ReadOnlyAccess` are convenient but broad (`Resource: "*"`).
+  Prefer a policy scoped to the one bucket or resource that is actually needed.
+- A budget alert is part of security, not just cost: an unexpected bill is often the first sign of
+  compromised credentials.
+
 ## Detection
 
 ```bash

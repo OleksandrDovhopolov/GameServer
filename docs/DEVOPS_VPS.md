@@ -160,6 +160,9 @@ Adding another subdomain: DNS A record, nginx site in `/etc/nginx/sites-availabl
 - Firewall opens 22, 80 and 443 only. Admin surfaces are reached through nginx or an SSH tunnel.
 - Docker logs are capped via `/etc/docker/daemon.json` so containers cannot fill the disk.
 - Run the smoke test after every deploy and after any infrastructure change.
+- A green Prometheus target only means the exporter answered. It does not mean the exporter
+  reached its data source — check `pg_up` and `redis_up` for that. A postgres-exporter that
+  could not authenticate sat green and unnoticed for days.
 - `deploy` is in the `docker` group, which is equivalent to root on this host. Treat SSH access
   to it as full machine access.
 - Not production-ready until backup, restore and rollback have each been rehearsed. Backup and
