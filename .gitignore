@@ -28,3 +28,14 @@ Thumbs.db
 
 # Local backups
 backups/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+# Saved plans: binary, and they can carry resource values in the clear.
+tfplan
+*.tfplan
