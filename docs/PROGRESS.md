@@ -16,6 +16,63 @@
 
 ---
 
+## 3 ноября 2026 — локальный Kubernetes для API
+
+- Создан локальный кластер `kind-gameserver-local` с одной нодой в Docker Desktop и namespace
+  `gameserver-local`. Добавлены манифесты API в [k8s/api-local/](../k8s/api-local/):
+  Namespace, ConfigMap, Deployment и Service. Учебный Secret со случайными значениями создан
+  прямо в кластере, без файла с паролями в репозитории.
+- Развёрнут только API из GHCR (`sha-44a79ef`). Через `kubectl port-forward` проверен
+  `http://localhost:18080/ping` → `pong`.
+- Deployment масштабирован с одного до двух Pod; оба стали готовы. Затем выполнено обновление
+  образа на `sha-f8e956b` и `kubectl rollout undo` к `sha-44a79ef`; после отката API снова
+  ответил `pong`.
+- Redis и PostgreSQL в этом кластере не запущены: ConfigMap содержит адреса-заглушки,
+  а проверка `/ping` подтверждает работу HTTP, но не игровых запросов или зависимостей.
+  Две реплики размещены на одной локальной ноде и не дают отказоустойчивости при её потере.
+
+---
+
+## 3 ноября 2026 — проверка rollback API-образа
+
+- Выполнен rollback с актуального образа `sha-44a79ef` на предпоследний
+  `sha-f8e956b` через `./scripts/deploy-vps.sh sha-f8e956b`.
+- Проверено, что API запущен именно из старого образа; smoke test и публичный `/ping` вернули
+  успешный результат `pong`.
+- Затем восстановлен актуальный образ `sha-44a79ef`; Redis и PostgreSQL не затрагивались.
+- Задача OPS-5 закрыта.
+
+---
+
+## 3 ноября 2026 — внешний мониторинг UptimeRobot
+
+- Настроен внешний мониторинг публичного endpoint `https://gameserver-staging.bobak.me.uk/ping`
+  через UptimeRobot.
+- Проверка выполняется снаружи Hetzner и дополняет Prometheus/Grafana, которые работают на самом
+  VPS и не могут сообщить о полном падении хоста.
+- Задача OPS-4 закрыта.
+
+---
+
+## 3 ноября 2026 — ECR: учебная публикация Docker-образа
+
+- Создан приватный ECR repository `gameserver-api-training` в регионе `eu-north-1`.
+- Локально собран образ `gameserver-api:ecr-test`, добавлен ECR-тег и выполнен успешный
+  `docker push`.
+- Образ проверен через AWS CLI: repository показывал `ecr-test`, digest и размер образа.
+- Локальный ECR-тег удалён и образ успешно скачан заново через `docker pull` из ECR.
+- Настроена lifecycle policy для сохранения последних трёх образов с тегами `ecr-test*`.
+- После проверки repository удалён через AWS CLI; получена ожидаемая ошибка
+  `RepositoryNotFoundException`.
+- Выполнена попытка отдельного запуска контейнера из ECR-образа. Для запуска были нужны временные
+  `ADMIN_USER` и `ADMIN_PASS`: без них API в окружении `Staging` завершался до запуска.
+
+Упражнение подтвердило цепочку: локальный Docker image → ECR push → ECR pull → запуск
+контейнера. ECR использовался только как учебный registry; основной сервер GameServer остаётся
+на Hetzner, а текущий production-пайплайн продолжает использовать GHCR.
+
+---
+
 ## 3 ноября 2026 — повтор Terraform apply/destroy
 
 - Повторно выполнен полный цикл Terraform: `init` → `plan` → `apply` → проверка ресурсов

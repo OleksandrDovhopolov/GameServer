@@ -103,3 +103,30 @@ Those pieces should be added after the API/Redis/PostgreSQL staging loop is bori
 - Do not reuse production secrets.
 - Do not change Railway variables, DNS, or client URLs while working on local staging.
 - Google Play Billing is disabled here by design.
+
+## Local Kubernetes API Exercise
+
+The separate `kind-gameserver-local` cluster has one Docker-backed node and a
+`gameserver-local` namespace. Manifests and repeatable commands are in
+[k8s/api-local/README.md](../k8s/api-local/README.md).
+
+Only the API runs in this cluster. Its Deployment uses the GHCR image
+`sha-44a79ef`, a ConfigMap for non-secret settings, and a cluster-created Secret
+for throwaway local credentials. The `gameserver-api` Service is `ClusterIP`
+on port 8080, so access from Windows uses a temporary port-forward:
+
+```powershell
+kubectl -n gameserver-local port-forward service/gameserver-api 18080:8080
+```
+
+Then `curl.exe http://localhost:18080/ping` returns `pong`. `18080` is the
+Windows-side port; `8080` is the Service/API port inside Kubernetes.
+
+Redis and PostgreSQL are not deployed there. Their connection strings in the
+ConfigMap are placeholders, and `/ping` checks HTTP only. Do not use this
+exercise to test game endpoints or database readiness. Docker Compose local
+staging remains a separate stack with real Redis and PostgreSQL.
+
+The Deployment was scaled to two Pods for a rollout exercise; image
+`sha-f8e956b` was rolled out, then `kubectl rollout undo` restored `sha-44a79ef`.
+The manifest still specifies `replicas: 1`: reapplying it restores one Pod.

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gameserver-api
+  namespace: gameserver-local
+spec:
+  type: ClusterIP
+  selector:
+    app: gameserver-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

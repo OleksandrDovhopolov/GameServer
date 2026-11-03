@@ -87,6 +87,7 @@ A backup is only proven by a restore. Add a line here after every rehearsal.
 | --- | --- | --- |
 | 2026-10-13 | `20261013-092854` | Dropped all `players` rows and changed a Redis resource value, then restored. All 3 players came back with their original ids; `save:restore-test-player:resources` went back from `{"Gold":1250}` to `{"Gold":250}`. Smoke test passed. |
 | 2026-10-16 | — | Scheduled run confirmed: three consecutive cron backups (14, 15, 16 Oct at 03:30:01) in `~/backup.log`, each with both files. |
+| 2026-11-03 | `sha-44a79ef` -> `sha-f8e956b` -> `sha-44a79ef` | Rollback rehearsal passed. API was deployed from the previous image tag, `docker ps` and smoke test confirmed it, public `/ping` returned `pong`, then the current image was restored. Redis and PostgreSQL were not changed. |
 
 ## Related
 
