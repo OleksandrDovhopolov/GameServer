@@ -1,0 +1,6 @@
+apiVersion: v2
+name: gameserver-api
+description: Local kind exercise for the GameServer API
+type: application
+version: 0.1.0
+appVersion: "sha-44a79ef"

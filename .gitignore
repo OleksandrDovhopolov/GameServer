@@ -39,3 +39,8 @@ crash.log
 # Saved plans: binary, and they can carry resource values in the clear.
 tfplan
 *.tfplan
+
+# Personal DevOps learning plan and generated PDFs
+docs/DEVOPS_PLAN.md
+output/
+scripts/build_devops_plan_pdf.py

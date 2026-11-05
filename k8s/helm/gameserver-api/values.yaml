@@ -1,0 +1,45 @@
+# Local exercise only. Redis and PostgreSQL are not part of this chart.
+replicaCount: 1
+
+image:
+  repository: ghcr.io/oleksandrdovhopolov/gameserver-api
+  tag: sha-44a79ef
+  pullPolicy: IfNotPresent
+
+service:
+  port: 8080
+
+# Create this Secret in gameserver-local before installing the chart.
+# Do not put credentials in values.yaml or --set: Helm stores release values.
+existingSecretName: gameserver-api-local
+
+config:
+  ASPNETCORE_ENVIRONMENT: Staging
+  ASPNETCORE_URLS: http://+:8080
+  Auth__Mode: Disabled
+  SaveStorage__Provider: Redis
+  GooglePlayBilling__Enabled: "false"
+  Kafka__Enabled: "false"
+  AdminTools__AllowRedisFlush: "false"
+  AdminTools__AllowPlayerSaveReset: "false"
+  # Placeholders: /ping works, but game endpoints need real dependencies.
+  Redis__ConnectionString: localhost:6379,abortConnect=false
+  Postgres__ConnectionString: Host=localhost;Port=5432;Database=unused;Username=unused
+
+probes:
+  path: /ping
+  startup:
+    periodSeconds: 5
+    failureThreshold: 24
+  liveness:
+    periodSeconds: 10
+  readiness:
+    periodSeconds: 5
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
