@@ -16,6 +16,23 @@
 
 ---
 
+## 5 ноября 2026 — подготовка OPS-3: бэкапы вне VPS
+
+- Добавлен отдельный Terraform stack `infra/backup` для приватного S3 bucket и IAM-пользователя
+  с доступом только на загрузку; его state отделён от учебного `infra/`.
+- Terraform применён в AWS account `361960318599`: создан bucket
+  `gameserver-staging-backups-361960318599`, включены Block Public Access, SSE-S3,
+  versioning и lifecycle. Повторный plan показал `No changes`. IAM simulation подтвердила
+  `PutObject` = allowed, `GetObject`/`DeleteObject` = implicitDeny.
+- Ночной скрипт дополнен выгрузкой дампа PostgreSQL и архива Redis в S3. Файл `SHA256SUMS`
+  загружается последним; при ошибке локальная копия остаётся, cron получает ошибку.
+- Порядок настройки и проверки добавлен в [RUNBOOK_BACKUP_RESTORE.md](RUNBOOK_BACKUP_RESTORE.md).
+  Локальный тест порядка загрузки и остановки при ошибке прошёл. Загрузка с VPS и
+  восстановление скачанной копии ещё не проверены;
+  OPS-3 остаётся открытой.
+
+---
+
 ## 5 ноября 2026 — OPS-2: защита SSH на staging VPS
 
 - В новой сессии проверен вход пользователя `deploy` по SSH-ключу с парольной фразой.

@@ -27,5 +27,10 @@ sleep 3
 echo "Backup written to $dir"
 du -h "$dir"/*
 
+# Keep the local backup and run retention even if S3 fails, but make cron report a failure.
+upload_status=0
+bash ./scripts/upload-backup-s3.sh "$dir" || upload_status=$?
+
 # Retention: drop backup folders older than keep_days.
 find backups -mindepth 1 -maxdepth 1 -type d -mtime "+$keep_days" -exec rm -rf {} +
+exit "$upload_status"

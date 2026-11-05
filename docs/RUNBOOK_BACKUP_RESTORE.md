@@ -15,12 +15,85 @@ All commands run on the VPS, from `~/apps/GameServer`, as the `deploy` user.
 `backups/` is in `.gitignore` — backups hold player data and must never be committed.
 Backups older than 14 days are deleted on the next run (`KEEP_DAYS` overrides this).
 
-They sit on the same disk as the containers, which protects against a bad migration or a
-dropped table, but not against losing the server. Copy them off the VPS periodically:
+The nightly job also uploads each new backup to a separate S3 bucket. Until the S3 setup
+below is completed, the job will create a local copy but exit with an error; this makes a
+missing offsite copy visible in `~/backup.log`.
+
+### Set up offsite storage (once)
+
+The backup Terraform stack is **separate** from the disposable AWS learning stack in
+`infra/`. Its state is `s3://gameserver-tfstate-bobak/backup/terraform.tfstate`, not
+`learn/terraform.tfstate`. The backup bucket is private, uses SSE-S3 encryption and
+versioning, and expires current objects after 30 days and noncurrent versions after another
+30 days. The uploader can write under `staging/` but cannot read, list or delete backups.
+
+On the Windows workstation, with the existing AWS admin profile, run from the repository:
+
+```powershell
+aws sts get-caller-identity
+terraform -chdir=infra/backup init
+terraform -chdir=infra/backup plan
+terraform -chdir=infra/backup apply
+terraform -chdir=infra/backup output
+```
+
+In order: check the account, initialize this stack, review its resources, create them, and
+show the bucket and IAM user names. Do **not** run `terraform destroy` in `infra/backup`;
+the bucket also has `prevent_destroy` as a safeguard. The learning stack in `infra/` can
+still be destroyed independently.
+
+In AWS Console open **IAM → Users → gameserver-staging-backup-uploader → Security
+credentials → Create access key**. Choose the option for an application outside AWS.
+Copy the access key ID and secret key directly to the VPS setup prompts; never commit,
+paste in chat, or place them in a Terraform variable/state file. The IAM user needs no
+Console login. Delete the key in IAM when rotating or retiring this setup.
+
+On the VPS, install AWS CLI v2 using the [official Linux instructions](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html),
+then, as `deploy`:
 
 ```bash
-scp -r staging:apps/GameServer/backups/<timestamp> ./backups/
+aws configure --profile gameserver-backup
+chmod 700 ~/.aws
+chmod 600 ~/.aws/credentials
+cp .env.backup.example .env.backup
+nano .env.backup
+chmod 600 .env.backup
 ```
+
+`aws configure` asks for the dedicated access key, secret key, region `eu-north-1` and
+output format `json`. The example `.env.backup` names the bucket in AWS account
+`361960318599`; verify this is the account shown by `aws sts get-caller-identity`.
+The `.env.backup` file is gitignored. These steps require the new repository files to have
+been delivered to `~/apps/GameServer` first.
+
+Run one manual backup from `~/apps/GameServer`:
+
+```bash
+./scripts/backup-vps.sh
+```
+
+It creates both local files, checks they are non-empty, writes `SHA256SUMS`, uploads the
+two data files, then uploads `SHA256SUMS` last. The final `Offsite backup complete:` line
+contains the S3 path. If upload fails, the local files remain and the command exits with
+an error. The existing `deploy` cron entry runs the same script at 03:30 UTC; check
+`~/backup.log` the next day.
+
+From the Windows workstation, use the admin AWS profile to list and download the new copy:
+
+```powershell
+$bucket = terraform -chdir=infra/backup output -raw bucket_name
+aws s3 ls "s3://$bucket/staging/" --recursive
+aws s3 cp "s3://$bucket/staging/<UTC timestamp>/" backups/offsite-check/ --recursive
+./scripts/verify-offsite-backup.ps1 -BackupDir backups/offsite-check
+```
+
+Check that the listing has `postgres.dump`, `redis-data.tar` and `SHA256SUMS` for the
+same timestamp. Replace `<UTC timestamp>` with the folder printed by the backup script.
+The verification script compares both files with the SHA-256 hashes in `SHA256SUMS`.
+Then rehearse
+`restore-vps.sh` in a **separate test environment**. The restore script replaces both
+databases; never run this rehearsal against the live staging stack. Record the result in
+the verification log below. A successful upload alone does not complete OPS-3.
 
 ## Take a backup
 
