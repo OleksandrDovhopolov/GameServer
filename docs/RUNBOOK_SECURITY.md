@@ -31,11 +31,11 @@ Keeping that true is worth more than any other control on this page.
 
 ## Hardening checklist
 
-- [ ] SSH password authentication disabled (`PasswordAuthentication no`)
-- [ ] Root login disabled (`PermitRootLogin no`)
-- [ ] SSH private key on the workstation has a passphrase
-- [ ] `fail2ban` installed
-- [ ] Unattended security upgrades enabled
+- [x] SSH password authentication disabled (`PasswordAuthentication no`, 05.11.2026)
+- [x] Root login disabled (`PermitRootLogin no`, 05.11.2026)
+- [x] SSH private key on the workstation has a passphrase (confirmed 05.11.2026)
+- [x] `fail2ban` active, enabled at boot, `sshd` jail active (05.11.2026)
+- [x] Unattended security upgrades enabled (`APT::Periodic` values `1`, timer enabled, 05.11.2026)
 - [x] Firewall allows only 22, 80, 443
 - [x] Redis and PostgreSQL ports not published to the host
 - [x] Prometheus and Grafana bound to `127.0.0.1`, Grafana reached through nginx + TLS
@@ -43,17 +43,29 @@ Keeping that true is worth more than any other control on this page.
 - [x] Secrets live only in `.env.*` files, which are gitignored
 - [ ] Backups copied off the VPS
 
-Check the SSH settings:
+The SSH overrides are in `/etc/ssh/sshd_config.d/00-gameserver-hardening.conf`.
+Check the **effective** settings (not just the contents of one file):
 
 ```bash
-sudo grep -rE '^(PasswordAuthentication|PermitRootLogin)' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/ 2>/dev/null
+sudo sshd -T | grep -E '^(passwordauthentication|kbdinteractiveauthentication|permitrootlogin|pubkeyauthentication) '
 ```
 
-After editing, validate before reloading, and keep the current session open while testing a
-new login in a second window:
+Expected, in any order: `passwordauthentication no`, `kbdinteractiveauthentication no`,
+`permitrootlogin no`, `pubkeyauthentication yes`. After future edits, validate before reloading;
+keep the current session open while testing a new key-only login in a second window:
 
 ```bash
 sudo sshd -t && sudo systemctl reload ssh
+```
+
+`fail2ban` and unattended-upgrades checks:
+
+```bash
+systemctl is-active fail2ban
+systemctl is-enabled fail2ban
+sudo fail2ban-client status sshd
+apt-config dump | grep -E 'APT::Periodic::(Update-Package-Lists|Unattended-Upgrade)'
+systemctl is-enabled apt-daily-upgrade.timer
 ```
 
 ## AWS
