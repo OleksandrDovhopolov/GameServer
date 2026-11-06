@@ -44,7 +44,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # sha-<commit> is immutable (used for rollback); staging moves to the latest VPS build.
+      # sha-<commit> identifies a build for rollback; staging moves to the latest VPS build.
       - id: meta
         uses: docker/metadata-action@v5
         with:

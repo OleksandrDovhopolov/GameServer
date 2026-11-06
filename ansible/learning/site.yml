@@ -1,0 +1,42 @@
+---
+- name: Configure a disposable Ubuntu lab VM
+  hosts: lab
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Install baseline packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+        state: present
+        update_cache: true
+        cache_valid_time: 86400
+
+    - name: Create an unprivileged lab operator
+      ansible.builtin.user:
+        name: gameserverlab
+        comment: GameServer Ansible lab user
+        shell: /bin/bash
+        create_home: true
+        state: present
+
+    - name: Create lab configuration directory
+      ansible.builtin.file:
+        path: /etc/gameserver-lab
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Write a non-secret configuration file
+      ansible.builtin.copy:
+        dest: /etc/gameserver-lab/settings.conf
+        content: |
+          managed_by=ansible
+          environment=learning
+        owner: root
+        group: root
+        mode: '0644'

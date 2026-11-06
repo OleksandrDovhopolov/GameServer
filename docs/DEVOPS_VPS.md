@@ -91,14 +91,16 @@ curl -fsS https://gameserver-staging.bobak.me.uk/ping # public HTTPS route
 Both `curl` calls should return `pong`. This only checks the HTTP process, not Redis or
 PostgreSQL. Port `8080` should bind to loopback; nginx listens on `80` and `443`.
 
-Deploy the latest build of branch `VPS`, then roll back to a specific one:
+Deploy a specific build from branch `VPS`, or restore the locally saved previous image:
 
 ```bash
-./scripts/deploy-vps.sh
 ./scripts/deploy-vps.sh sha-3842cd0
+./scripts/deploy-vps.sh rollback-last-good
 ```
 
 Images are built by GitHub Actions and pulled from GHCR; nothing is compiled on the VPS.
+For the manual GitHub Actions deployment and SSH setup, see
+[RUNBOOK_DEPLOY_STAGING.md](RUNBOOK_DEPLOY_STAGING.md).
 
 Smoke test on its own:
 
@@ -182,6 +184,6 @@ Adding another subdomain: DNS A record, nginx site in `/etc/nginx/sites-availabl
   could not authenticate sat green and unnoticed for days.
 - `deploy` is in the `docker` group, which is equivalent to root on this host. Treat SSH access
   to it as full machine access.
-- Not production-ready until backup, restore and rollback have each been rehearsed. Backup and
-  restore were verified on 2026-10-13; rollback by image tag is still unrehearsed.
+- Backup, offsite restore and manual image-tag rollback have been rehearsed; the automated
+  staging deployment and its failure rollback still require a live run.
 - Do not point the mobile client or closed-testing DNS at this VPS before that.

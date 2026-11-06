@@ -1,0 +1,81 @@
+name: Deploy staging VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Existing GHCR tag built from the VPS branch, for example sha-44a79ef'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gameserver-staging-vps
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Require the VPS branch
+        run: |
+          [[ "$GITHUB_REF" == refs/heads/VPS ]] || {
+            echo 'Select the VPS branch in Run workflow' >&2
+            exit 1
+          }
+
+      - name: Validate requested image tag
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          [[ "$IMAGE_TAG" =~ ^sha-[0-9a-f]{7,40}$ ]] || {
+            echo 'Only sha-<commit> image tags are accepted' >&2
+            exit 1
+          }
+          commit="$(git rev-parse --verify "${IMAGE_TAG#sha-}^{commit}")"
+          git merge-base --is-ancestor "$commit" HEAD || {
+            echo 'The requested image commit is not in the VPS branch' >&2
+            exit 1
+          }
+          echo "Deploying image built from commit $commit"
+
+      - name: Configure SSH
+        env:
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_KNOWN_HOSTS: ${{ secrets.STAGING_KNOWN_HOSTS }}
+          STAGING_HOST: ${{ vars.STAGING_HOST }}
+        run: |
+          : "${STAGING_SSH_KEY:?Add STAGING_SSH_KEY in GitHub Actions secrets}"
+          : "${STAGING_KNOWN_HOSTS:?Add STAGING_KNOWN_HOSTS in GitHub Actions secrets}"
+          : "${STAGING_HOST:?Add STAGING_HOST in GitHub Actions variables}"
+          [[ "$STAGING_HOST" =~ ^[a-zA-Z0-9.-]+$ ]] || exit 1
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$STAGING_SSH_KEY" > "$HOME/.ssh/staging_key"
+          printf '%s\n' "$STAGING_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -P '' -f "$HOME/.ssh/staging_key" > /dev/null
+
+      - name: Pull repository changes and deploy on VPS
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          STAGING_HOST: ${{ vars.STAGING_HOST }}
+        run: |
+          ssh -i "$HOME/.ssh/staging_key" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o ConnectTimeout=10 \
+            "deploy@${STAGING_HOST}" "bash -s -- ${IMAGE_TAG}" <<'REMOTE'
+          set -euo pipefail
+          cd ~/apps/GameServer
+          [[ "$(git branch --show-current)" == VPS ]] || {
+            echo 'VPS checkout is not on the VPS branch' >&2
+            exit 1
+          }
+          GIT_TERMINAL_PROMPT=0 git pull --ff-only origin VPS
+          ./scripts/deploy-vps.sh "$1"
+          REMOTE

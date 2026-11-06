@@ -10,9 +10,21 @@
 | Незакрытые задачи и планы | [TODO.md](TODO.md) |
 | Бэкап, восстановление, журнал проверок | [RUNBOOK_BACKUP_RESTORE.md](RUNBOOK_BACKUP_RESTORE.md) |
 | Безопасность, ротация секретов | [RUNBOOK_SECURITY.md](RUNBOOK_SECURITY.md) |
+| Деплой через GitHub Actions и откат | [RUNBOOK_DEPLOY_STAGING.md](RUNBOOK_DEPLOY_STAGING.md) |
 
 Публичный staging: <https://gameserver-staging.bobak.me.uk>
 Мониторинг: <https://grafana.bobak.me.uk>
+
+---
+
+## 6 ноября 2026 — подготовлен контролируемый деплой на staging
+
+- VPS smoke test переписан на Bash: API, Redis и PostgreSQL проверяются без `pwsh`.
+- Скрипт деплоя теперь использует точный тег образа, обновляет только API, сохраняет предыдущий
+  образ локально и пытается вернуть его при ошибке после обновления.
+- Подготовлены ручной GitHub Actions workflow и отдельная Ansible-лаборатория на временной VM.
+  Секреты GitHub и SSH-доступ ещё нужно настроить; запуск workflow и живой откат пока не
+  подтверждены. Порядок описан в [RUNBOOK_DEPLOY_STAGING.md](RUNBOOK_DEPLOY_STAGING.md).
 
 ---
 

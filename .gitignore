@@ -44,3 +44,6 @@ tfplan
 docs/DEVOPS_PLAN.md
 output/
 scripts/build_devops_plan_pdf.py
+
+# Local Ansible lab target
+ansible/learning/inventory.ini
