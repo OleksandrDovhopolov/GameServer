@@ -74,6 +74,23 @@ Never reuse Railway production secrets, closed-testing data, or local staging pa
 
 ## Everyday commands
 
+Read-only host diagnostics, from the `deploy` shell:
+
+```bash
+uptime                              # load and uptime
+free -h                             # memory
+df -h /                             # free space on root filesystem
+systemctl is-active docker nginx    # host services
+sudo journalctl -u docker -n 30 --no-pager  # recent Docker service events
+sudo ss -lntp                        # listening TCP ports and owning processes
+getent hosts gameserver-staging.bobak.me.uk # DNS resolution
+curl -fsS http://127.0.0.1:8080/ping         # API without nginx
+curl -fsS https://gameserver-staging.bobak.me.uk/ping # public HTTPS route
+```
+
+Both `curl` calls should return `pong`. This only checks the HTTP process, not Redis or
+PostgreSQL. Port `8080` should bind to loopback; nginx listens on `80` and `443`.
+
 Deploy the latest build of branch `VPS`, then roll back to a specific one:
 
 ```bash
