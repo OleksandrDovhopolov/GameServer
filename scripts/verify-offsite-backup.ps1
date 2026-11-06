@@ -32,4 +32,4 @@ foreach ($line in Get-Content -LiteralPath $manifest) {
 foreach ($name in $expectedFiles) {
     if (-not $seen.ContainsKey($name)) { throw "Missing manifest entry: $name" }
 }
-Write-Output 'Offsite backup files verified. Restore has not been tested yet.'
+Write-Output 'Offsite backup file checks passed.'

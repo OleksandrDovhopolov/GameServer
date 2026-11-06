@@ -41,7 +41,7 @@ Keeping that true is worth more than any other control on this page.
 - [x] Prometheus and Grafana bound to `127.0.0.1`, Grafana reached through nginx + TLS
 - [x] Admin API behind Basic Auth; `AllowRedisFlush` and `AllowPlayerSaveReset` are `false`
 - [x] Secrets live only in `.env.*` files, which are gitignored
-- [ ] Backups copied off the VPS (OPS-3 code prepared; AWS/VPS upload and restore still unverified)
+- [x] Offsite backup verified (nightly S3 copy downloaded and restored in isolated containers, 06.11.2026)
 
 The SSH overrides are in `/etc/ssh/sshd_config.d/00-gameserver-hardening.conf`.
 Check the **effective** settings (not just the contents of one file):

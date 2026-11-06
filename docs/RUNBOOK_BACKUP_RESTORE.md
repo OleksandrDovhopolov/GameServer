@@ -1,7 +1,8 @@
 # Runbook: Backup and Restore (VPS staging)
 
 Covers the Redis and PostgreSQL data of the `gameserver-vps` stack on `gameserver-staging-01`.
-All commands run on the VPS, from `~/apps/GameServer`, as the `deploy` user.
+Unless a section says Windows workstation, commands run on the VPS from `~/apps/GameServer`
+as the `deploy` user.
 
 ## Where backups live
 
@@ -84,15 +85,17 @@ From the Windows workstation, use the admin AWS profile to list and download the
 $bucket = terraform -chdir=infra/backup output -raw bucket_name
 aws s3 ls "s3://$bucket/staging/" --recursive
 aws s3 cp "s3://$bucket/staging/<UTC timestamp>/" backups/offsite-check/ --recursive
-./scripts/verify-offsite-backup.ps1 -BackupDir backups/offsite-check
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify-offsite-backup.ps1 -BackupDir .\backups\offsite-check
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\rehearse-offsite-restore.ps1 -BackupDir .\backups\offsite-check
 ```
 
 Check that the listing has `postgres.dump`, `redis-data.tar` and `SHA256SUMS` for the
 same timestamp. Replace `<UTC timestamp>` with the folder printed by the backup script.
-The verification script compares both files with the SHA-256 hashes in `SHA256SUMS`.
-Then rehearse
-`restore-vps.sh` in a **separate test environment**. The restore script replaces both
-databases; never run this rehearsal against the live staging stack. Record the result in
+The first script compares both files with the SHA-256 hashes in `SHA256SUMS`. The second
+starts disposable PostgreSQL and Redis containers with no published ports or connection
+to the running stacks, restores the downloaded data, checks table/key counts, and removes
+those containers and their temporary Redis volume. It does not call `restore-vps.sh`:
+that script targets the live VPS stack and replaces both databases. Record the result in
 the verification log below. A successful upload alone does not complete OPS-3.
 
 ## Take a backup
@@ -161,6 +164,9 @@ A backup is only proven by a restore. Add a line here after every rehearsal.
 | 2026-10-13 | `20261013-092854` | Dropped all `players` rows and changed a Redis resource value, then restored. All 3 players came back with their original ids; `save:restore-test-player:resources` went back from `{"Gold":1250}` to `{"Gold":250}`. Smoke test passed. |
 | 2026-10-16 | — | Scheduled run confirmed: three consecutive cron backups (14, 15, 16 Oct at 03:30:01) in `~/backup.log`, each with both files. |
 | 2026-11-03 | `sha-44a79ef` -> `sha-f8e956b` -> `sha-44a79ef` | Rollback rehearsal passed. API was deployed from the previous image tag, `docker ps` and smoke test confirmed it, public `/ping` returned `pong`, then the current image was restored. Redis and PostgreSQL were not changed. |
+| 2026-11-05 | `20261105-161229` | First manual offsite upload: `backup-vps.sh` reported completion, and the S3 Console showed `postgres.dump`, `redis-data.tar` and `SHA256SUMS`. Download, checksum verification, isolated restore and scheduled cron upload remain to be tested. |
+| 2026-11-06 | `20261106-033001` | S3 contained all three objects from the 03:30 UTC run. Downloaded them to a gitignored local folder; both SHA-256 checks passed. In isolated Docker containers, PostgreSQL restored 5 public tables and Redis restored 1 key. Temporary containers and volume were removed. Live staging was untouched. The VPS cron log itself was not read in this rehearsal. |
+| 2026-11-06 | `20261106-033001` | The user subsequently checked `~/backup.log` on the VPS: this scheduled run wrote both local files and logged `Offsite backup complete` for the same S3 prefix. |
 
 ## Related
 
